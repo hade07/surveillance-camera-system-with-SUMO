@@ -1,4 +1,4 @@
-﻿// using Internal;
+// using Internal;
 using System.Runtime.CompilerServices;
 using System;
 using System.Linq;
@@ -13,6 +13,9 @@ using OfficeOpenXml;
 using OfficeOpenXml.FormulaParsing;
 using System.Threading.Tasks;
 using static OfficeOpenXml.ExcelErrorValue;
+using System.Text.RegularExpressions;
+using Microsoft.Extensions.FileSystemGlobbing;
+
 
 namespace surveillance_system
 {
@@ -26,7 +29,8 @@ namespace surveillance_system
         static int[] randSeedList = new int [numSim];
 
         const int param_N_CCTV = 10;
-        const int param_N_PED = 10;
+        //const int param_N_PED = 10;
+        static int param_N_PED = 0;// 240823 김단하. 보행자 최대수가 N_PED인데 엑셀에서 읽어오자
 
         // 240806 김단하. 시뮬레이션 보행자 이동 모델 옵션 선택, 
         const int Opt_PED_MobilityModel = 1;
@@ -731,7 +735,6 @@ namespace surveillance_system
                 const int Ped_Velocity = 1700; // (mm/s)
 
 
-
                 double PED_x=0, PED_y=0; // 240806, 김단하.
                 if (Opt_PED_MobilityModel == 1)
                 {
@@ -748,86 +751,142 @@ namespace surveillance_system
                         return;
                     }
 
-
-                    peds = new Pedestrian[N_Ped];
-                    //peds = new Pedestrian[10000];
-
-                    // List<Pedestrian> peds = new List<Pedestrian>(); //240812. 이거 금지
-
-                    HashSet<string> processedPersonIds = new HashSet<string>(); // 중복된 personId들 판별용, personID 저장용 HashSet
-
+                    //peds = new Pedestrian[N_Ped];
+                    // List<Pedestrian> peds = new List<Pedestrian>(); //240812. 이거 오랜만에 벡터 쓰니까 오류 떴엇는데 지금해봐두 되지 않을까?>
+                    List<string> PedID = new List<string>(); //240824 김단하. Pedestrian's ID 저장
                     // 엑셀 파일 로드
                     using (var package = new ExcelPackage(new FileInfo(filePath)))
                     {
                         // 첫 번째 워크시트 가져오기
                         var worksheet1 = package.Workbook.Worksheets[0];
 
-
-                        for (int i = 1; i <= 10000; i++)
+                        int row = 1;
+                        //첫번째 루프. 여기서 N_Ped를 얻고 pedestrian ID리스트를 얻기 위한 작업
+                        while (!string.IsNullOrEmpty(worksheet1.Cells[row, 1].Text)) //엑셀 파일에 뭐 있으면 읽어오기
                         {
-                            string personId = worksheet1.Cells[i+1, 2].Text;  //person_ID 읽어오기
+                            string personId = worksheet1.Cells[row + 1, 2].Text;  //person_ID 읽어오기
+                            Match match = Regex.Match(personId, @"\d+");
 
-                            if (!string.IsNullOrEmpty(personId) && !processedPersonIds.Contains(personId)){ // 만약 person_ID 값이 본 셀에 존재한다면
-                                
+                            if (match.Success)
+                            {
+                                // 매칭된 숫자 부분이 있다면
+                                //Console.WriteLine("Match found: " + match.Value);
+                                int temp = int.Parse(match.Value); // 최대ID, 즉 생성할 보행자 수 얻기 위함
+                                if (temp > N_Ped)
+                                {
+                                    N_Ped = temp;
+                                }
+                            }
+                            else
+                            {
+                                // 매칭된 숫자 부분이 없다면
+                                //Console.WriteLine("No match found.");
+                            }
+
+/*                            if (!string.IsNullOrEmpty(personId))
+                            { // 만약 person_ID 값이 본 셀에 존재한다면
+                                //ID를 배열에 저장하자.
+                                if (!PedID.Contains(personId))
+                                {
+                                    PedID.Add(personId); //새로운 ID 등장하면 추가
+                                    Console.WriteLine("The new ID added" + personId);
+                                }
+                            }*/
+                            row++;
+                        }  
+
+                        peds = new Pedestrian[N_Ped]; // 240823 김단하, 보행자 객체 여기서 생성
+                        Console.WriteLine("The number of peds : " + N_Ped);
+
+                        //두번째 루프 , 여기서 부턴 타임 스텝, x,y좌표를 같이 읽어온다
+                        row = 1;
+                        while (!string.IsNullOrEmpty(worksheet1.Cells[row, 1].Text)) //엑셀 파일에 뭐 있으면 읽어오기
+                        {
+                            string personId = worksheet1.Cells[row + 1, 2].Text;  //person_ID 읽어오기
+                            Match match = Regex.Match(personId, @"\d+");
+                            
+                            if (match.Success){
+                                // 매칭된 숫자 부분이 있다면
+                                //Console.WriteLine("Match found: " + match.Value);
+                            }
+                            else{
+                                // 매칭된 숫자 부분이 없다면
+                                //Console.WriteLine("No match found.");
+                            }
+
+                            if (!string.IsNullOrEmpty(personId))
+                            { // 만약 person_ID 값이 본 셀에 존재한다면
+
                                 //엑셀파일에서 타임스텝, x,y좌표 값도 읽어온다.  
-                                string rawValue1 = worksheet1.Cells[i+1, 1].Text; //시간
-                                string rawValue2 = worksheet1.Cells[i+1, 3].Text; //x좌표
-                                string rawValue3 = worksheet1.Cells[i+1, 4].Text; //y좌표
-                                double value1, value2, value3; 
+                                string rawValue1 = worksheet1.Cells[row + 1, 1].Text; //시간
+                                string rawValue2 = worksheet1.Cells[row + 1, 3].Text; //x좌표
+                                string rawValue3 = worksheet1.Cells[row + 1, 4].Text; //y좌표
+                                double value1, value2, value3;
 
                                 if (double.TryParse(rawValue1, out value1)){ //rawdata는 텍스트 형식. 따라서 double로 변환
-                                    Console.WriteLine("Converted Value: " + value1);
+                                    //Console.WriteLine("Converted Value: " + value1);
                                 }
-                                else {
-                                    Console.WriteLine("Conversion failed. The value is not a valid double.");
+                                else{
+                                    //Console.WriteLine("Conversion failed. The value is not a valid double.");
                                 }
-                                if (double.TryParse(rawValue2, out value2)) {
-                                    Console.WriteLine("Converted Value: " + value2);
+                                if (double.TryParse(rawValue2, out value2)) { 
+                                   // Console.WriteLine("Converted Value: " + value2);
                                 }
-                                else {
-                                    Console.WriteLine("Conversion failed. The value is not a valid double.");
+                                else{
+                                    //Console.WriteLine("Conversion failed. The value is not a valid double.");
                                 }
-                                if (double.TryParse(rawValue3, out value3)) {
-                                    Console.WriteLine("Converted Value: " + value3);
+                                if (double.TryParse(rawValue3, out value3)){
+                                    //Console.WriteLine("Converted Value: " + value3);
                                 }
-                                else {
-                                    Console.WriteLine("Conversion failed. The value is not a valid double.");
+                                else{
+                                    //Console.WriteLine("Conversion failed. The value is not a valid double.");
                                 }
 
                                 if (double.TryParse(rawValue2, out double x) && double.TryParse(rawValue3, out double y))
                                 {
                                     // 초기화된 Pedestrian 객체 생성
-                                    peds[i] = new Pedestrian(personId, value1, value2);
 
-                                    // 처리한 personId는 HashSet에 추가
-                                    processedPersonIds.Add(personId);
+                                    //peds[row] = new Pedestrian(personId, value1, value2); 
 
-                                    Console.WriteLine($"보행자 생성; PersonID: {personId}, x좌표: {value2}, y좌표: {value3}");
+                                    //Console.WriteLine($"보행자 생성; PersonID: {personId}, x좌표: {value2}, y좌표: {value3}");
                                 }
                                 PED_x = value2;
                                 PED_y = value3;
+
+                                int indexPeds = 0;
+                                if (!PedID.Contains(personId)) //ID가 기존 리스트에 존재하지 않는다면
+                                {
+                                    PedID.Add(personId); //새로운 ID 추가
+                                    Console.WriteLine("The new ID added : " + personId);
+
+                                    // 초기화된 Pedestrian 객체 생성
+                                    peds[indexPeds] = new Pedestrian(personId, value1, value2);
+                                    
+                                    // 최초 등장한 보행자 속성Enable을 True로 변경
+                                    peds[indexPeds].setEnable();
+
+                                    if (peds[indexPeds] != null)
+                                    {
+                                        Console.WriteLine($"보행자 생성; Index: {indexPeds}, PersonID: {peds[indexPeds].ID}, x좌표: {peds[indexPeds].X}, y좌표: {peds[indexPeds].Y}, 가능여부: {peds[indexPeds].Enable}");
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("보행자 객체가 제대로 생성되지 않았습니다.");
+                                    }
+
+                                    //Console.WriteLine($"보행자 생성; Index: {indexPeds}, PersonID: {peds[indexPeds].ID}, x좌표: {peds[indexPeds].X}, y좌표: {peds[indexPeds].Y}, 가능여부: {peds[indexPeds].Enable}");
+                                    indexPeds++;
+                                }
                             }
-
-                            
-
-                            /*
-                            double value1 = worksheet1.Cells[i, i].GetValue<double>(); // 시간
-                            double value2 = worksheet1.Cells[i, i+1].GetValue<double>(); // x좌표
-                            double value3 = worksheet1.Cells[i, i+2].GetValue<double>(); // y좌표
-
-                            peds[i] = new Pedestrian(i, i);
-                            Console.WriteLine($"{i+1} 번째 보행자 생성; TimeStep: {value1}, x좌표:{value2}, y좌표:{value3}");
-
-                            Console.WriteLine($"첫 번째 셀의 값: {value1}");
-                            Console.WriteLine($"두 번째 셀의 값: {value2}");
-                            Console.WriteLine($"세 번째 셀의 값: {value3}");
-                            */
-
+                            row++;
                         }
+                        
                     }
+  
                 }
+                        //Console.WriteLine("The Max ID of PED is: " + N_Ped);
 
-
+                
                 else if (Opt_PED_MobilityModel == 0)
                 {
                     peds = new Pedestrian[N_Ped];
