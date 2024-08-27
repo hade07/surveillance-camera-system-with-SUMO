@@ -15,6 +15,7 @@ using System.Threading.Tasks;
 using static OfficeOpenXml.ExcelErrorValue;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.FileSystemGlobbing;
+using System.Drawing;
 
 
 namespace surveillance_system
@@ -340,6 +341,7 @@ namespace surveillance_system
             return returnArr;
         }
 
+       
         static int[] checkDetection_ParFor(int N_CCTV, int N_Ped)
         {
             int[] returnArr = new int[N_Ped]; // 반환할 탐지 결과 (1: 탐지  0: 거리상 미탐지  -1: 방향 미스)
@@ -608,6 +610,8 @@ namespace surveillance_system
 
             return returnArr;
         }
+
+     
             static void Main(string[] args)
         {
 
@@ -680,9 +684,16 @@ namespace surveillance_system
                     //Road_N_Interval = 5;
 
                     // set 3 -result0, CCTV camera = 150(little) , map size = small
-                    Road_Width = 10000;// 1000; // mm
-                    Road_Interval = 25000;//88000; // mm, 10 meter
+                    Road_Width = 10000;// 1000; // mm. 10M
+                    Road_Interval = 25000;//88000; // mm, 10 , 25M
                     Road_N_Interval = 5;
+
+                    // 240825 김단하 , SUMO 보행자 X,Y좌표가 최대 1500,1200대임을 감안하여 임의 세팅
+                    //Road_Width = 10000;// 1000; // mm. 10M
+                    //Road_Interval = 100000;//88000; // mm, 10 , 100M
+                    //Road_N_Interval = 10;
+
+
                 }
 
                 double[] log_PED_position = null;
@@ -736,13 +747,14 @@ namespace surveillance_system
 
 
                 double PED_x=0, PED_y=0; // 240806, 김단하.
+
+                // 읽어올 보행자 위치 정보 array에 저장
+                object[,] pedestrian_fcd_output ;
                 if (Opt_PED_MobilityModel == 1)
                 {
-                    // 240806, 김단하. 보행자 x,y 좌표 엑셀에서 읽어온담에 array에 저장. 
                     // 읽어 오는 것 선 구현. 시뮬레이션 시작 전, 보행자 객체들 생성 전에 이루어지게 이 작업이.
                     // 엑셀 파일 경로
-
-                    string filePath = @"test_pedestrian_route_240811.xlsx";
+                    string filePath = @"test_pedestrian_route_240825.xlsx";
 
                     // 파일이 존재하는지 확인
                     if (!File.Exists(filePath))
@@ -751,6 +763,7 @@ namespace surveillance_system
                         return;
                     }
 
+                    
                     //peds = new Pedestrian[N_Ped];
                     // List<Pedestrian> peds = new List<Pedestrian>(); //240812. 이거 오랜만에 벡터 쓰니까 오류 떴엇는데 지금해봐두 되지 않을까?>
                     List<string> PedID = new List<string>(); //240824 김단하. Pedestrian's ID 저장
@@ -760,12 +773,30 @@ namespace surveillance_system
                         // 첫 번째 워크시트 가져오기
                         var worksheet1 = package.Workbook.Worksheets[0];
 
+                        // 이 곳에 보행자 정보들 저장한다. 시간, x,y 좌표값, speed 등
+                       pedestrian_fcd_output = new object[worksheet1.Dimension.Rows, 7];
+                       
                         int row = 1;
                         //첫번째 루프. 여기서 N_Ped를 얻고 pedestrian ID리스트를 얻기 위한 작업
                         while (!string.IsNullOrEmpty(worksheet1.Cells[row, 1].Text)) //엑셀 파일에 뭐 있으면 읽어오기
                         {
-                            string personId = worksheet1.Cells[row + 1, 2].Text;  //person_ID 읽어오기
+                            string personId = worksheet1.Cells[row + 1, 3].Text;  //person_ID 읽어오기
                             Match match = Regex.Match(personId, @"\d+");
+
+                            for (int j = 1; j <= 7; j++)
+                            {
+                                if (j == 3) //person_ID 가져오기
+                                {
+                                    string temp_PersonID = worksheet1.Cells[row, j].Text;
+                                    Match tempMatch = Regex.Match(temp_PersonID, @"\d+");
+                                    if (tempMatch.Success)
+                                        pedestrian_fcd_output[row - 1, j - 1] = int.Parse(tempMatch.Value);
+
+                                }
+                                else
+                                    pedestrian_fcd_output[row - 1, j - 1] = worksheet1.Cells[row, j].Value;
+                                    
+                            }
 
                             if (match.Success)
                             {
@@ -783,122 +814,137 @@ namespace surveillance_system
                                 //Console.WriteLine("No match found.");
                             }
 
-/*                            if (!string.IsNullOrEmpty(personId))
-                            { // 만약 person_ID 값이 본 셀에 존재한다면
-                                //ID를 배열에 저장하자.
-                                if (!PedID.Contains(personId))
-                                {
-                                    PedID.Add(personId); //새로운 ID 등장하면 추가
-                                    Console.WriteLine("The new ID added" + personId);
-                                }
-                            }*/
+                            /*                            if (!string.IsNullOrEmpty(personId))
+                                                        { // 만약 person_ID 값이 본 셀에 존재한다면
+                                                            //ID를 배열에 저장하자.
+                                                            if (!PedID.Contains(personId))
+                                                            {
+                                                                PedID.Add(personId); //새로운 ID 등장하면 추가
+                                                                Console.WriteLine("The new ID added" + personId);
+                                                            }
+                                                        }*/
                             row++;
-                        }  
+                        }
 
-                        peds = new Pedestrian[N_Ped]; // 240823 김단하, 보행자 객체 여기서 생성
+
                         Console.WriteLine("The number of peds : " + N_Ped);
+                    }
 
-                        //두번째 루프 , 여기서 부턴 타임 스텝, x,y좌표를 같이 읽어온다
-                        row = 1;
-                        while (!string.IsNullOrEmpty(worksheet1.Cells[row, 1].Text)) //엑셀 파일에 뭐 있으면 읽어오기
+                    // 240827 김단하. 보행자 등장 및 위치 갱신 해주는. 이거 함수화 하는 부분, 나머지 부분 분리 제대로 안됨
+                    void update_Pedestrian(ref Pedestrian[] peds){
+                        using (var package = new ExcelPackage(new FileInfo(filePath)))
                         {
-                            string personId = worksheet1.Cells[row + 1, 2].Text;  //person_ID 읽어오기
-                            Match match = Regex.Match(personId, @"\d+");
-                            
-                            if (match.Success){
-                                // 매칭된 숫자 부분이 있다면
-                                //Console.WriteLine("Match found: " + match.Value);
-                            }
-                            else{
-                                // 매칭된 숫자 부분이 없다면
-                                //Console.WriteLine("No match found.");
-                            }
+                            // 첫 번째 워크시트 가져오기
+                            var worksheet1 = package.Workbook.Worksheets[0];
 
-                            if (!string.IsNullOrEmpty(personId))
-                            { // 만약 person_ID 값이 본 셀에 존재한다면
+                            int row = 1;
+                            //두번째 루프 , 여기서 부턴 타임 스텝, x,y좌표를 같이 읽어온다
+                            row = 1;
+                            while (!string.IsNullOrEmpty(worksheet1.Cells[row, 1].Text)) //엑셀 파일에 뭐 있으면 읽어오기
+                            {
+                                string personId = worksheet1.Cells[row + 1, 3].Text;  //person_ID 읽어오기
+                                Match match = Regex.Match(personId, @"\d+");
 
-                                //엑셀파일에서 타임스텝, x,y좌표 값도 읽어온다.  
-                                string rawValue1 = worksheet1.Cells[row + 1, 1].Text; //시간
-                                string rawValue2 = worksheet1.Cells[row + 1, 3].Text; //x좌표
-                                string rawValue3 = worksheet1.Cells[row + 1, 4].Text; //y좌표
-                                double value1, value2, value3;
-
-                                if (double.TryParse(rawValue1, out value1)){ //rawdata는 텍스트 형식. 따라서 double로 변환
-                                    //Console.WriteLine("Converted Value: " + value1);
-                                }
-                                else{
-                                    //Console.WriteLine("Conversion failed. The value is not a valid double.");
-                                }
-                                if (double.TryParse(rawValue2, out value2)) { 
-                                   // Console.WriteLine("Converted Value: " + value2);
-                                }
-                                else{
-                                    //Console.WriteLine("Conversion failed. The value is not a valid double.");
-                                }
-                                if (double.TryParse(rawValue3, out value3)){
-                                    //Console.WriteLine("Converted Value: " + value3);
-                                }
-                                else{
-                                    //Console.WriteLine("Conversion failed. The value is not a valid double.");
-                                }
-
-                                if (double.TryParse(rawValue2, out double x) && double.TryParse(rawValue3, out double y))
+                                if (match.Success)
                                 {
-                                    // 초기화된 Pedestrian 객체 생성
-
-                                    //peds[row] = new Pedestrian(personId, value1, value2); 
-
-                                    //Console.WriteLine($"보행자 생성; PersonID: {personId}, x좌표: {value2}, y좌표: {value3}");
+                                    // 매칭된 숫자 부분이 있다면
+                                    //Console.WriteLine("Match found: " + match.Value);
                                 }
-                                PED_x = value2;
-                                PED_y = value3;
-
-                                int indexPeds = 0;
-                                if (!PedID.Contains(personId)) //ID가 기존 리스트에 존재하지 않는다면
+                                else
                                 {
-                                    PedID.Add(personId); //새로운 ID 추가
-                                    Console.WriteLine("The new ID added : " + personId);
+                                    // 매칭된 숫자 부분이 없다면
+                                    //Console.WriteLine("No match found.");
+                                }
 
-                                    // 초기화된 Pedestrian 객체 생성
-                                    peds[indexPeds] = new Pedestrian(personId, value1, value2);
-                                    
-                                    // 최초 등장한 보행자 속성Enable을 True로 변경
-                                    peds[indexPeds].setEnable();
+                                if (!string.IsNullOrEmpty(personId))
+                                { // 만약 person_ID 값이 본 셀에 존재한다면
 
-                                    if (peds[indexPeds] != null)
-                                    {
-                                        Console.WriteLine($"보행자 생성; Index: {indexPeds}, PersonID: {peds[indexPeds].ID}, x좌표: {peds[indexPeds].X}, y좌표: {peds[indexPeds].Y}, 가능여부: {peds[indexPeds].Enable}");
+                                    //엑셀파일에서 타임스텝, x,y좌표 값도 읽어온다.  
+                                    string rawValue1 = worksheet1.Cells[row + 1, 1].Text; //시간
+                                    string rawValue2 = worksheet1.Cells[row + 1, 5].Text; //x좌표
+                                    string rawValue3 = worksheet1.Cells[row + 1, 6].Text; //y좌표
+                                    double value1, value2, value3;
+
+                                    if (double.TryParse(rawValue1, out value1))
+                                    { //rawdata는 텍스트 형식. 따라서 double로 변환
+                                        //Console.WriteLine("Converted Value: " + value1);
                                     }
                                     else
                                     {
-                                        Console.WriteLine("보행자 객체가 제대로 생성되지 않았습니다.");
+                                        //Console.WriteLine("Conversion failed. The value is not a valid double.");
+                                    }
+                                    if (double.TryParse(rawValue2, out value2))
+                                    {
+                                        // Console.WriteLine("Converted Value: " + value2);
+                                    }
+                                    else
+                                    {
+                                        //Console.WriteLine("Conversion failed. The value is not a valid double.");
+                                    }
+                                    if (double.TryParse(rawValue3, out value3))
+                                    {
+                                        //Console.WriteLine("Converted Value: " + value3);
+                                    }
+                                    else
+                                    {
+                                        //Console.WriteLine("Conversion failed. The value is not a valid double.");
                                     }
 
-                                    //Console.WriteLine($"보행자 생성; Index: {indexPeds}, PersonID: {peds[indexPeds].ID}, x좌표: {peds[indexPeds].X}, y좌표: {peds[indexPeds].Y}, 가능여부: {peds[indexPeds].Enable}");
-                                    indexPeds++;
-                                }
-                            }
-                            row++;
-                        }
-                        
-                    }
-  
-                }
-                        //Console.WriteLine("The Max ID of PED is: " + N_Ped);
+                                    if (double.TryParse(rawValue2, out double x) && double.TryParse(rawValue3, out double y))
+                                    {
+                                        // 초기화된 Pedestrian 객체 생성
 
-                
-                else if (Opt_PED_MobilityModel == 0)
-                {
-                    peds = new Pedestrian[N_Ped];
-                    for (int i = 0; i < N_Ped; i++)
-                    {
-                        peds[i] = new Pedestrian();
+                                        //peds[row] = new Pedestrian(personId, value1, value2); 
+
+                                        //Console.WriteLine($"보행자 생성; PersonID: {personId}, x좌표: {value2}, y좌표: {value3}");
+                                    }
+                                    PED_x = value2;
+                                    PED_y = value3;
+
+                                    int indexPeds = 0;
+                                    if (!PedID.Contains(personId)) //ID가 기존 리스트에 존재하지 않는다면
+                                    {
+                                        PedID.Add(personId); //새로운 ID 추가
+                                        Console.WriteLine("The new ID added : " + personId);
+
+                                        // 초기화된 Pedestrian 객체 생성
+                                        peds[indexPeds] = new Pedestrian(personId, value1, value2);
+
+                                        // 최초 등장한 보행자 속성Enable을 True로 변경
+                                        peds[indexPeds].setEnable();
+
+                                        // Spatial_resolution을 일단 임의로 배정해줌..???
+                                        //peds[indexPeds].Spatial_Resolution = new double[N_CCTV, 11];
+
+                                        if (peds[indexPeds] != null)
+                                        {
+                                            Console.WriteLine($"보행자 생성; Index: {indexPeds}, PersonID: {peds[indexPeds].ID}, x좌표: {peds[indexPeds].X}, y좌표: {peds[indexPeds].Y}, 가능여부: {peds[indexPeds].Enable}");
+                                        }
+                                        else
+                                        {
+                                            Console.WriteLine("보행자 객체가 제대로 생성되지 않았습니다.");
+                                        }
+
+                                        //Console.WriteLine($"보행자 생성; Index: {indexPeds}, PersonID: {peds[indexPeds].ID}, x좌표: {peds[indexPeds].X}, y좌표: {peds[indexPeds].Y}, 가능여부: {peds[indexPeds].Enable}");
+                                        indexPeds++;
+                                    }
+                                }
+                                row++;
+                            }
+
+                        }
                     }
+
                 }
-                else
+                //Console.WriteLine("The Max ID of PED is: " + N_Ped);
+
+                peds = new Pedestrian[N_Ped]; // 240827 김단하, 보행자 객체 여기서 생성해야 하는데.
+            for (int i = 0; i < N_Ped; i++)
                 {
-                    Console.WriteLine("잘못된 보행자 mobility 모델 선택입니다");
+                    peds[i] = new Pedestrian();
                 }
+
+
 
             cctvs = new CCTV[N_CCTV];
                 for (int i = 0; i < N_CCTV; i++)
@@ -920,7 +966,7 @@ namespace surveillance_system
                     //road.roadBuilder(Road_Width, Road_Interval, Road_N_Interval, N_CCTV, N_Ped);
 
                     // 240812 김단하, setPed 호출 안한 경우
-                    road.roadBuilder(Road_Width, Road_Interval, Road_N_Interval, N_CCTV, N_Ped, false);
+                    road.roadBuilder(Road_Width, Road_Interval, Road_N_Interval, N_CCTV, N_Ped, true);
 
                     /*
                     // debug 220428
@@ -932,7 +978,6 @@ namespace surveillance_system
                     }
                     */
                     //road.printRoadInfo();
-
 
                     /*
 
@@ -984,12 +1029,12 @@ namespace surveillance_system
                             direction = Math.Round(2 * Math.PI - direction, 8); 
                         }
                         */
-
-                        // 240811, 김단하/. 이하 15줄 가량을 생각없이 주석처리했다가 이유도 모르고 계속 Null인 보행자 객체 참조하는 에러가 뜬다는 교훈을 얻었습니다
+                        //240825 DanHA Kim, [band-aid] I added this line below, because 'DIST_PED_DST' is initiallized in the method setPed_RandomPosition
+                        road.DIST_PED_DST = new double[N_Ped, road.DST.GetLength(0)];
 
                         double Target_DST_X = road.DST[0, 0];
                         double Target_DST_Y = road.DST[0, 1];
-                        double minDIST = road.DIST_PED_DST[i, 0]; // 240812, 김단하/ 이 부분 자꾸 에러가 납니다.. 초기화가 안되는 것 같은데 원인 파악중입니다. (._.
+                        double minDIST = road.DIST_PED_DST[i, 0]; 
 
                         for (int j = 1; j < road.DST.GetLength(0); j++)
                         {
@@ -1001,10 +1046,12 @@ namespace surveillance_system
                             }
 
                         }
+                        Console.WriteLine(peds[1].X); // 240827. 김단하. 보행자 객체 초기화가 안되는 듯.
+                        
                         peds[i].define_PED(Ped_Width, Ped_Height, Target_DST_X, Target_DST_Y, Ped_Velocity, N_CCTV);
                         //ped.updateDestination();   
 
-                        peds[i].setDirection(PED_x, PED_y);  // 김단하. 제가 잘못 건드렸는데 다시 수정해야 합니다
+                        //peds[i].setDirection(PED_x, PED_y);  
                         peds[i].TTL = (int)Math.Ceiling((minDist / peds[i].Velocity) / aUnitTime);
                         peds[i].printPedInfo();
                     }
@@ -1124,20 +1171,63 @@ namespace surveillance_system
                 // simulation
                 while (Now <= Sim_Time)
                 {
-                    //Console.WriteLine(".");
-                    // 추적 검사
+                    double TempNow = Now * 10;
+                    int TempNow2 = (int)TempNow;
 
+                    // 필터링 조건: 첫 번째 열이 "Alice"인 행들을 필터링
+                    List<object[]> temp_filtered_fcd_output = new List<object[]>();
 
-                    //240812 김단하, setDirection계속 실행하려 한 흔적입니다.
-                    for (int i = 0; i < N_Ped; i++)
+                    int rows = pedestrian_fcd_output.GetLength(0);
+                    int columns = pedestrian_fcd_output.GetLength(1);
+
+                    // 조건에 맞는 행들을 찾아 List에 추가
+                    //240827 김단하, 이 부분 알고리즘 공부하기
+                    for (int i = 0; i < rows; i++)
                     {
-                        if (peds[i] != null)
+                        double temptarget_time = (double)pedestrian_fcd_output[i, 0]*10;
+                        int target_time = (int)temptarget_time;
+                        if (target_time == TempNow2) // 첫 번째 열의 값이 현재 time과 일치하는 경우
                         {
-                            peds[i].setDirection(PED_x, PED_y);
+                            object[] row = new object[columns];
+                            for (int j = 0; j < columns; j++)
+                            {
+                                row[j] = pedestrian_fcd_output[i, j]; // 행을 새로운 배열로 복사
+                            }
+                            temp_filtered_fcd_output.Add(row);
                         }
                     }
 
+                    // / 필터링된 행들을 2차원 배열로 변환
+                    object[,] filtered_fcd_output = new object[temp_filtered_fcd_output.Count, columns];
+
+                    for (int i = 0; i < temp_filtered_fcd_output.Count; i++)
+                    {
+                        for (int j = 0; j < columns; j++)
+                        {
+                            filtered_fcd_output[i, j] = temp_filtered_fcd_output[i][j];
+                        }
+                    }
+
+                    //update_Pedestrian();
+
+/*                    // 결과 출력
+                    Console.WriteLine("Filtered Array:");
+                    for (int i = 0; i < filtered_fcd_output.GetLength(0); i++)
+                    {
+                        for (int j = 0; j < filtered_fcd_output.GetLength(1); j++)
+                        {
+                            Console.Write(filtered_fcd_output[i, j] + "\t");
+                        }
+                        Console.WriteLine();
+                    }*/
+
+
+
                     int[] res = checkDetection_ParFor(N_CCTV, N_Ped);
+
+                    
+                    //Console.WriteLine(".");
+                    // 추적 검사'
                     // threading.. error
                     // int[] res = new int[N_Ped];
 
