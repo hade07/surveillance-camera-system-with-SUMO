@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -7,8 +7,8 @@ namespace surveillance_system
     public partial class Program
     {
         public class SurveillanceTarget {
-            public string ID; // 240812 added by DanHa Kim
-            public double X;
+            public int ID; // 240829 modified. string -> int  by DanHa Kim
+            public double X; 
             public double Y;
 
             public double DST_X;
@@ -22,6 +22,9 @@ namespace surveillance_system
             public double MAX_Dist_Y;
 
             public double ground; // Z ?
+            // 240823 김단하 추가, 보행자가 시뮬레이션에 등장하는지 여부. false가 default
+            public bool Enable = false;
+
             /* ==================================
             /   추가
             /   line 67~ 87 변수 
@@ -81,14 +84,59 @@ namespace surveillance_system
                 this.DST_Y = DST_Y;
                 this.Velocity = Velocity;
 
-                this.Unit_Travel_Dist = Velocity * aUnitTime; // 240816. 김단하. 이거 여행거리?
+                this.Unit_Travel_Dist = Velocity * aUnitTime; 
 
-                // % for performace measure
+                // % for performance measure
                 this.N_Surv = 0;
 
                 this.Spatial_Resolution = new double[N_CCTV, 11];
                 // [Out of Range(0), Direction Miss(-1), Detected(1)]  SR(Width1, Width2, Height1,Height2) numPixels(Width1, Width2, Height1,Height2) areaPixels(min, max)
             }
+
+            // 240901 김단하 define_PED 오버로딩. DST_X 같은 목적지 필요 없어보여서 삭제./
+            public void define_PED(
+                double Width,
+                double Height,
+                double Velocity,
+                int N_CCTV
+            )
+            {
+                //Random rand = new Random(randSeed); // modified by 0boo 23-01-27
+
+                this.W = Width;
+                this.H = Height;
+                this.D1 = 90 * Math.PI / 180;   // modified by 0BoO, deg -> rad
+                this.D2 = (180 + 90 * rand.NextDouble()) * Math.PI / 180; // modified by 0BoO, deg -> rad
+                this.W2 = this.W / 2;
+
+                //this.Pos_H1[0] =
+                //    Math.Round(this.W2 * Math.Cos(D1 + this.Direction) + this.X, 2);
+                //this.Pos_H1[1] =
+                //    Math.Round(this.W2 * Math.Sin(D1 + this.Direction) + this.Y, 2);
+                //this.Pos_H2[0] =
+                //    Math.Round(this.W2 * Math.Cos(D2 + this.Direction) + this.X, 2);
+                //this.Pos_H2[1] =
+                //    Math.Round(this.W2 * Math.Sin(D2 + this.Direction) + this.Y, 2);
+
+                this.Pos_V1[0] = this.X;
+                this.Pos_V1[1] = this.H;
+
+                this.Pos_V2[0] = this.X;
+                // [220331] may be height of ground, instead of 0
+                this.Pos_V2[1] = 0;
+
+
+                this.Velocity = Velocity;
+
+                this.Unit_Travel_Dist = Velocity * aUnitTime;
+
+                // % for performance measure
+                this.N_Surv = 0;
+
+                this.Spatial_Resolution = new double[N_CCTV, 11];
+                // [Out of Range(0), Direction Miss(-1), Detected(1)]  SR(Width1, Width2, Height1,Height2) numPixels(Width1, Width2, Height1,Height2) areaPixels(min, max)
+            }
+
 
             public void setDirection()
             {
@@ -103,9 +151,11 @@ namespace surveillance_system
                     Direction = Math.Round(2 * Math.PI - Direction, 8);
                 }
 
+                //240905 김단하. Pos_H1, Pos_H2는 X축과 보행자 현 위치, 목적자 위치간 벡터의 각도를 이용해 구함
+
                 this.Pos_H1[0] = //어깨1의 좌표 업데이트
                     Math.Round(this.W2 * Math.Cos(D1 + this.Direction) + this.X, 2);
-                this.Pos_H1[1] =
+                this.Pos_H1[1] = 
                     Math.Round(this.W2 * Math.Sin(D1 + this.Direction) + this.Y, 2);
                 this.Pos_H2[0] = //어깨2
                     Math.Round(this.W2 * Math.Cos(D2 + this.Direction) + this.X, 2);
@@ -138,9 +188,9 @@ namespace surveillance_system
             }
 
             // 240812 김단하
-            public void setDirection(string personID, double x2, double y2)
-            {
-                string[] person_ID = new string[1];
+            public void setDirection(int personID, double x2, double y2)
+            { //x2,y2가 다음 목적지
+                int[] person_ID = new int[1];
                 double[] A = new double[2];
                 A[0] = x2 - X;
                 A[1] = y2 - Y;
@@ -152,14 +202,25 @@ namespace surveillance_system
                     Direction = Math.Round(2 * Math.PI - Direction, 8);
                 }
 
-                this.Pos_H1[0] =
+                this.Pos_H1[0] = // 오른쪽 어깨
                     Math.Round(this.W2 * Math.Cos(D1 + this.Direction) + this.X, 2);
                 this.Pos_H1[1] =
                     Math.Round(this.W2 * Math.Sin(D1 + this.Direction) + this.Y, 2);
-                this.Pos_H2[0] =
+                this.Pos_H2[0] = // 왼쪽 어깨
                     Math.Round(this.W2 * Math.Cos(D2 + this.Direction) + this.X, 2);
                 this.Pos_H2[1] =
                     Math.Round(this.W2 * Math.Sin(D2 + this.Direction) + this.Y, 2);
+            }
+
+            //240905 김단하. SUMO output인 fcd_output 파일의 angle 피쳐를 읽어올 수 있다면?
+            public void setDirectionbyAngle(int personID, double x2, double y2)
+            {
+                //
+                // x2,y2가 다음 목적지. X,Y가 지금 보행자의 머리 위치. Pos_H1[0], Pos_H1[1]: 오른쪽어깨, Pos_H2[0], Pos_H2[1]: 왼쪽어깨
+                int[] person_ID = new int[1];
+                double[] A = new double[2];
+                A[0] = x2 - X;
+                A[1] = y2 - Y;
             }
 
             public Boolean isArrived()
@@ -208,18 +269,24 @@ namespace surveillance_system
 
         public class Pedestrian : SurveillanceTarget, Person
         {
-            //기본생성자
+            //기본생성자. 240901. 김단하. 임의로 0으로 초기화.
             public Pedestrian()
             {
-
+                this.X = 0;
+                this.Y = 0;
             }
             // 240811. 김단하. SUMO 기반 보행자 mobility 를 위한 생성자
-            public Pedestrian(string personID, double x,double y)
+            public Pedestrian(int personID, double x,double y)
             {
                 this.ID = personID;
                 this.X = x;
                 this.Y = y;
                 //this.H = height;
+            }
+            //240811. 김단하. 보행자가 시뮬레이션에 등장하는지 여부 바꿔주는
+            public void setEnable()
+            {
+                this.Enable = true;
             }
 
             public void move()
