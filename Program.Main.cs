@@ -18,6 +18,7 @@ using Microsoft.Extensions.FileSystemGlobbing;
 using System.Drawing;
 using OfficeOpenXml.Style;
 using OfficeOpenXml.Style.Dxf;
+using static surveillance_system.Program;
 
 
 namespace surveillance_system
@@ -51,8 +52,8 @@ namespace surveillance_system
 
 
 
-        const bool On_Visualization = true;
-        const bool Opt_Observation = true;
+        const bool On_Visualization = false;
+        const bool Opt_Observation = false;
         const bool Opt_Demo = true;
         const bool Opt_Log = false; // to get log of events
 
@@ -696,6 +697,23 @@ namespace surveillance_system
             }
 
         }
+
+        // 241013 읽어올 CCTV 위치 정보 array에 저장
+        static double[,] cctv_fcd_output;
+
+
+        // 241013 김단하 CCTV 고정 좌표 배치
+        static void setCCTV_FromArray(int n_cctv, double[,] cctvCoordinates)
+        {
+            for (int i = 0; i < n_cctv; i++)
+            {
+                cctvs[i].X = cctvCoordinates[i, 0]; // X 좌표
+                cctvs[i].Y = cctvCoordinates[i, 1]; // Y 좌표
+            }
+        }
+
+
+
         static void Main(string[] args)
         {
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
@@ -740,10 +758,10 @@ namespace surveillance_system
                     Road_Interval = 25000;
                     Road_N_Interval = 5;
                 }
-
                 else if (Opt_PED_MobilityModel == 1)
                 {
                     //do nothing
+                    On_Road_Builder = false;
                 }
 
                 else
@@ -820,6 +838,7 @@ namespace surveillance_system
 
                 }
 
+                //  SUMO output으로부터 보행자 위치 읽어오는 옵션
                 if (Opt_PED_MobilityModel == 1) //  SUMO output으로부터 보행자 위치 읽어오는 옵션
                 {
                     // 읽어 오는 것 선 구현. 시뮬레이션 시작 전, 보행자 객체들 생성 전에 이루어지게 이 작업이.
@@ -1003,6 +1022,108 @@ namespace surveillance_system
                 }
                 //Console.WriteLine("The Max ID of PED is: " + N_Ped);
 
+                // 241013 SUMO output으로부터 CCTV 위치 읽어오는 옵션
+
+                if (Opt_PED_MobilityModel == 1) {
+                    // cctv 배열 초기화부 일단 해준다
+                    cctv_fcd_output = new double[N_CCTV, 2];
+
+                    string filePath = @"test_pedestrian_route_240917.xlsx";
+                    // 파일이 존재하는지 확인
+                    if (!File.Exists(filePath))
+                    {
+                        Console.WriteLine("파일을 찾을 수 없습니다.");
+                        return;
+                    }
+
+                    // 엑셀 파일 로드
+                    object[,] temp_cctv_fcd_output;
+                    using (var package = new ExcelPackage(new FileInfo(filePath)))
+                    {
+                        // 첫 번째 워크시트 가져오기
+                        var worksheet1 = package.Workbook.Worksheets[0];
+
+                        // 이 곳에 CCTV좌표 정보들 저장한다.  x,y 좌표값 // 컬럼수 2
+                        // cctv_fcd_output = new object[N_CCTV, 2];
+                        // 아래는 임시 배열. 추후 여기서 랜덤 추출하여 N_CCTV * 2 크기의 cctv_fcd_output에 값 저장 예정
+                        temp_cctv_fcd_output = new object[worksheet1.Dimension.Rows +1, 2];
+
+                        int row = 1;
+
+                        while (!string.IsNullOrEmpty(worksheet1.Cells[row, 1].Text)) //엑셀 파일에 뭐 있으면 읽어오기
+                        {
+
+                            string CCTV_X = worksheet1.Cells[row + 1, 6].Text;  //CCTV_X 읽어오기
+                            string CCTV_Y = worksheet1.Cells[row + 1, 7].Text;  //CCTV_Y 읽어오기
+                            Match match_CCTV_X = Regex.Match(CCTV_X, @"\d+(\.\d+)?"); //숫자로 match
+                            Match match_CCTV_Y = Regex.Match(CCTV_Y, @"\d+(\.\d+)?"); //숫자로 match
+
+                            //for (int k = 0; k < 2; k++)
+                            {
+                                if (match_CCTV_X.Success && !string.IsNullOrEmpty(CCTV_X))
+                                {
+                                    // 매칭된 숫자 부분이 있다면
+                                    //Console.WriteLine("Match found: " + match.Value);
+
+                                    double temp_CCTV_X = double.Parse(match_CCTV_X.Value); // CCTV의 X 좌표를 얻어옴
+                                    Console.WriteLine("temp_CCTV_X found: " + temp_CCTV_X);
+                                    temp_cctv_fcd_output[row+1,0] = temp_CCTV_X;
+                                    Console.WriteLine("CCTV_X is stored at temp_cctv_fcd_output: " + temp_cctv_fcd_output[row + 1, 0]);
+                                }
+                                else
+                                {
+                                    // 매칭된 숫자 부분이 없다면
+                                    //Console.WriteLine("No match found.");
+                                }
+
+                                if (match_CCTV_Y.Success && !string.IsNullOrEmpty(CCTV_Y))
+                                {
+                                    // 매칭된 숫자 부분이 있다면
+                                    //Console.WriteLine("Match found: " + match.Value);
+                                    double temp_CCTV_Y = double.Parse(match_CCTV_Y.Value); // CCTV의 X 좌표를 얻어옴
+                                    Console.WriteLine("temp_CCTV_Y found: " + temp_CCTV_Y);
+                                    temp_cctv_fcd_output[row + 1, 1] = temp_CCTV_Y;
+                                    Console.WriteLine("CCTV_Y is stored at temp_cctv_fcd_output: " + temp_cctv_fcd_output[row + 1, 1]);
+                                }
+                                else
+                                {
+                                    // 매칭된 숫자 부분이 없다면
+                                    //Console.WriteLine("No match found.");
+                                }
+
+                            }
+
+                            row++;
+                        }
+
+
+                    }
+                    Random rand_cctv = new Random();
+                    for (int i = 0; i < N_CCTV; i++)
+                    {
+                        //랜덤한 행의 X,Y 값을 가져와서 CCTV 위치 배열에 저장하자
+                        int randomIndex = rand_cctv.Next(0, temp_cctv_fcd_output.GetLength(0));
+                        Console.WriteLine("the length of temp_cctv_fcd_output is "+ temp_cctv_fcd_output.GetLength(0));
+                        Console.WriteLine("the index is : "+ randomIndex);
+                        double randomValue_X = Convert.ToDouble(temp_cctv_fcd_output[randomIndex, 0]);
+                        double randomValue_Y = Convert.ToDouble(temp_cctv_fcd_output[randomIndex, 1]);
+
+                        //cctv_fcd_output에대 하나씩 저장
+                        cctv_fcd_output[i, 0] = randomValue_X;
+                        Console.WriteLine("the value of CCTV_X is : " + cctv_fcd_output[i, 0]);
+                        cctv_fcd_output[i, 1] = randomValue_Y;
+                        Console.WriteLine("the value of CCTV_Y is : "+ cctv_fcd_output[i, 1]);
+
+                    }
+                    Console.WriteLine("CCTV location information has been successfully stored in cctv_fcd_output: " + cctv_fcd_output.GetLength(0));
+
+                }
+
+                else
+                {
+                    throw new Exception("Unexpected option _ get CCTV position");
+                }
+
                 peds = new Pedestrian[N_Ped]; // 240827 김단하, 보행자 객체 여기서 생성해야 하는데.
                 for (int i = 0; i < N_Ped; i++)
                 {
@@ -1057,46 +1178,55 @@ namespace surveillance_system
                         Console.WriteLine("{0}번째 cctv = ({1}, {2}) ", i + 1, cctvs[i].X, cctvs[i].Y);
                     }
                     */
+                }
+                else if (Opt_PED_MobilityModel == 1)
+                {
 
 
-                    //ped init
-                    for (int i = 0; i < N_Ped; i++)
+
+                }
+
+
+                //ped init
+                for (int i = 0; i < N_Ped; i++)
+                {
+                    double minDist = 0.0;
+
+                    // 240901 김단하. 초기화된 Pedestrian 객체 임의 생성
+                    peds[i] = new Pedestrian();
+                    //int idx_minDist = 0;
+                    //double[] Dist_Map = new double[road.DST.GetLength(0)];
+
+                    // 맨처음 위치에서 가장 가까운 도착지를 설정 (보행자 맨처음 위치는 setPed()로 설정)
+                    //double[,] newPos = road.getPointOfAdjacentRoad(road.getIdxOfIntersection(ped.X, ped.Y));
+                    //double dst_x = Math.Round(newPos[0, 0]);
+                    //double dst_y = Math.Round(newPos[0, 1]);
+
+                    // Car object일경우 가까운 도착지 설정
+                    // double[,] newPos = road.getPointOfAdjacentIntersection(road.getIdxOfIntersection(ped.X, ped.Y), ped.X, ped.Y);
+                    // double dst_x = Math.Round(newPos[0, 0]);
+                    // double dst_y = Math.Round(newPos[0, 1]);
+
+                    //Calc_Dist_and_get_MinDist(road.DST, ped.X, ped.Y, ref Dist_Map, ref minDist, ref idx_minDist);
+
+                    //double dst_x = road.DST[idx_minDist, 0];
+                    //double dst_y = road.DST[idx_minDist, 1];
+
+                    // 보행자~목적지 벡터
+                    /*
+                    double[] A = new double[2];
+                    A[0] = dst_x - ped.X;
+                    A[1] = dst_y - ped.Y;        
+
+                    double[] B = { 0.001, 0 };
+                    double direction = Math.Round(Math.Acos(InnerProduct(A, B) / (Norm(A) * Norm(B))),8);
+                    if(ped.Y > dst_y)
                     {
-                        double minDist = 0.0;
-
-                        // 240901 김단하. 초기화된 Pedestrian 객체 임의 생성
-                        peds[i] = new Pedestrian();
-                        //int idx_minDist = 0;
-                        //double[] Dist_Map = new double[road.DST.GetLength(0)];
-
-                        // 맨처음 위치에서 가장 가까운 도착지를 설정 (보행자 맨처음 위치는 setPed()로 설정)
-                        //double[,] newPos = road.getPointOfAdjacentRoad(road.getIdxOfIntersection(ped.X, ped.Y));
-                        //double dst_x = Math.Round(newPos[0, 0]);
-                        //double dst_y = Math.Round(newPos[0, 1]);
-
-                        // Car object일경우 가까운 도착지 설정
-                        // double[,] newPos = road.getPointOfAdjacentIntersection(road.getIdxOfIntersection(ped.X, ped.Y), ped.X, ped.Y);
-                        // double dst_x = Math.Round(newPos[0, 0]);
-                        // double dst_y = Math.Round(newPos[0, 1]);
-
-                        //Calc_Dist_and_get_MinDist(road.DST, ped.X, ped.Y, ref Dist_Map, ref minDist, ref idx_minDist);
-
-                        //double dst_x = road.DST[idx_minDist, 0];
-                        //double dst_y = road.DST[idx_minDist, 1];
-
-                        // 보행자~목적지 벡터
-                        /*
-                        double[] A = new double[2];
-                        A[0] = dst_x - ped.X;
-                        A[1] = dst_y - ped.Y;        
-
-                        double[] B = { 0.001, 0 };
-                        double direction = Math.Round(Math.Acos(InnerProduct(A, B) / (Norm(A) * Norm(B))),8);
-                        if(ped.Y > dst_y)
-                        {
-                            direction = Math.Round(2 * Math.PI - direction, 8); 
-                        }
-                        */
+                        direction = Math.Round(2 * Math.PI - direction, 8); 
+                    }
+                    */
+                    if (Opt_PED_MobilityModel == 0)
+                    {
                         //240825 DanHA Kim, [band-aid] I added this line below, because 'DIST_PED_DST' is initiallized in the method setPed_RandomPosition
                         road.DIST_PED_DST = new double[N_Ped, road.DST.GetLength(0)];
 
@@ -1114,42 +1244,51 @@ namespace surveillance_system
                             }
 
                         }
-
-                        // 240901 김단하. define_PED에서 N_CCTV 수를 갖고 spatial resolution 만들어주는. 그 부분에서 에러가 남.
-                        peds[i].define_PED(Ped_Width, Ped_Height, Ped_Velocity, N_CCTV);
-                        //peds[i].define_PED(Ped_Width, Ped_Height, Target_DST_X, Target_DST_Y, Ped_Velocity, N_CCTV);
-                        //ped.updateDestination();
-
-                        //peds[i].setDirection(PED_x, PED_y);  
-                        peds[i].TTL = (int)Math.Ceiling((minDist / peds[i].Velocity) / aUnitTime);
-                        peds[i].printPedInfo();
                     }
-
-
-                    // cctv init
-                    for (int i = 0; i < N_CCTV; i++)
+                    else if (Opt_PED_MobilityModel == 1)
                     {
-                        // 220317
-                        // Height.Max() 는 고정값 (=대충 10000)..
-                        // 상수로 바꿔도 될듯??
-                        // default Z는 3000
-                        // 3000 ~ 10000 사이 값, 즉 7000이 변하는 값
-                        // default(min) : 3000, variant : 7000 
-                        // maxZ = min + variant 이런식으로?..
+                        // do nothing (Destination of pedestrian is not required in OSM+SUMO Mode)
+                    }
+               
 
-                        // cctvs[i].Z =
-                        //     (int)Math.Ceiling(rand.NextDouble() * (Height.Max() - 3000)) + 3000; // milimeter
 
-                        //cctvs[i].setZ((int)Math.Ceiling(rand.NextDouble() * (Height.Max() - 3000)) + 6000);
-                        cctvs[i].setZ(10000);
-                        cctvs[i].WD = WD;
-                        cctvs[i].HE = HE;
-                        cctvs[i].imW = (int)imW;
-                        cctvs[i].imH = (int)imH;
-                        cctvs[i].Focal_Length = Lens_FocalLength;
-                        // 220104 초기 각도 설정
-                        // cctvs[i].ViewAngleH = rand.NextDouble() * 360;
-                        // cctvs[i].ViewAngleV = -35 - 20 * rand.NextDouble();
+                // 240901 김단하. define_PED에서 N_CCTV 수를 갖고 spatial resolution 만들어주는. 그 부분에서 에러가 남.
+                peds[i].define_PED(Ped_Width, Ped_Height, Ped_Velocity, N_CCTV);
+                //peds[i].define_PED(Ped_Width, Ped_Height, Target_DST_X, Target_DST_Y, Ped_Velocity, N_CCTV);
+                //ped.updateDestination();
+
+                //peds[i].setDirection(PED_x, PED_y);  
+                peds[i].TTL = (int)Math.Ceiling((minDist / peds[i].Velocity) / aUnitTime);
+                peds[i].printPedInfo();
+            }
+
+
+            // cctv init
+            for (int i = 0; i < N_CCTV; i++)
+            {
+                // 220317
+                // Height.Max() 는 고정값 (=대충 10000)..
+                // 상수로 바꿔도 될듯??
+                // default Z는 3000
+                // 3000 ~ 10000 사이 값, 즉 7000이 변하는 값
+                // default(min) : 3000, variant : 7000 
+                // maxZ = min + variant 이런식으로?..
+
+                // cctvs[i].Z =
+                //     (int)Math.Ceiling(rand.NextDouble() * (Height.Max() - 3000)) + 3000; // milimeter
+
+                //cctvs[i].setZ((int)Math.Ceiling(rand.NextDouble() * (Height.Max() - 3000)) + 6000);
+                cctvs[i].setZ(10000);
+                cctvs[i].WD = WD;
+                cctvs[i].HE = HE;
+                cctvs[i].imW = (int)imW;
+                cctvs[i].imH = (int)imH;
+                cctvs[i].Focal_Length = Lens_FocalLength;
+                    // 220104 초기 각도 설정
+                    // cctvs[i].ViewAngleH = rand.NextDouble() * 360;
+                    // cctvs[i].ViewAngleV = -35 - 20 * rand.NextDouble();
+                    if (Opt_PED_MobilityModel == 0)
+                    {
                         double Target_DST_X = road.DST[0, 0];
                         double Target_DST_Y = road.DST[0, 1];
                         double minDIST = road.DIST_CCTV_DST[i, 0];
@@ -1165,697 +1304,475 @@ namespace surveillance_system
 
                         //cctvs[i].setViewAngleH(rand.NextDouble() * 360*Math.PI/180);  // (23-02-02) modified by 0BoO, deg -> rad
                         cctvs[i].setViewAngleH(Target_DST_X, Target_DST_Y);
-
-
-                        // cctvs[i].setViewAngleH(rand.Next(4) * 90);
-                        // cctvs[i].setViewAngleV(-35 - 20 * rand.NextDouble());
-                        cctvs[i].setViewAngleV(-45.0 * Math.PI / 180);   // (23-02-02) modified by 0BoO, deg -> rad
-
-
-                        cctvs[i].setFixMode(true); // default (rotate)
-
-                        cctvs[i].H_AOV = 2 * Math.Atan(WD / (2 * Lens_FocalLength));
-                        cctvs[i].V_AOV = 2 * Math.Atan(HE / (2 * Lens_FocalLength));
-
-                        cctvs[i].calcBlindToPed();          // (23-02-01) added by 0BoO
-                        cctvs[i].calcEffDistToPed(3000);     // (23-02-01) added by 0BoO, input value is 3000mm(3meter)
-
-                        // 기기 성능상의 최대 감시거리 (임시값)
-                        cctvs[i].Max_Dist = cctvs[i].Eff_Dist_To;//50 * 100 * 10; // 50m (milimeter)
-                                                                 // cctvs[i].Max_Dist = 500 * 100 * 100; // 500m (milimeter)
-                        int L_Dist = (int)(cctvs[i].Eff_Dist_To - cctvs[i].Eff_Dist_From);
-                        double[] Dist2 = new double[L_Dist];
-
-                        for (int j = 1; j < L_Dist; j++)
-                        {
-                            Dist2[j] = cctvs[i].Eff_Dist_From + j;
-                        }
-
-                        cctvs[i].detectedPedIndex = new List<int>();
-
-                        // Line 118~146
-                        /*  여기부턴 Road_Builder 관련 정보가 없으면 의미가 없을거같아서 주석처리했어용..
-                            그리고 get_Sectoral_Coverage 이런함수도 지금은 구현해야할지 애매해서..?
-                        */
-
-                        cctvs[i]
-                            .get_PixelDensity(Dist2,
-                            cctvs[i].WD,
-                            cctvs[i].HE,
-                            cctvs[i].Focal_Length,
-                            cctvs[i].imW,
-                            cctvs[i].imH);
-
-                        cctvs[i].get_H_FOV(Dist2, cctvs[i].WD, cctvs[i].Focal_Length, cctvs[i].ViewAngleH, cctvs[i].X, cctvs[i].Y);
-                        cctvs[i].get_V_FOV(Dist2, cctvs[i].HE, cctvs[i].Focal_Length, cctvs[i].ViewAngleV, cctvs[i].X, cctvs[i].Z);
-                        // cctvs[i].printCCTVInfo();
-
-                        //cctvs[i].calcBlindToPed();          // (23-02-01) added by 0BoO
-                        //cctvs[i].calcEffDistToPed(3000);     // (23-02-01) added by 0BoO, input value is 3000mm(3meter)
                     }
-                }
-                /* -------------------------------------------
-                *  도로 정보 생성 + 보행자/CCTV 초기화 끝
-                ------------------------------------------- */
-                // 600초
-                double Sim_Time = 10; // unit: sec
-                                      //double Now = 10; 
-                double Now = 0; // 240831 김단하
 
-                // Console.WriteLine(">>> Simulating . . . \n");
-                int[] R_Surv_Time = new int[N_Ped]; // 탐지 
-                int[] directionError = new int[N_Ped]; // 방향 미스
-                int[] outOfRange = new int[N_Ped]; // 거리 범위 밖
-                double[] minSpatialResolution = new double[N_Ped];  // the cummulative spatial resolution(min)
-                double[] maxSpatialResolution = new double[N_Ped];  // the cummulative spatial resolution(max)
-
-                string[] traffic_x = new string[(int)(Sim_Time / aUnitTime)]; // csv 파일 출력 위한 보행자별 x좌표
-                string[] traffic_y = new string[(int)(Sim_Time / aUnitTime)]; // csv 파일 출력 위한 보행자별 y좌표
-                string[] detection = new string[(int)(Sim_Time / aUnitTime)]; // csv 파일 출력 위한 추적여부
-                string header = "";
-
-                int road_min = 0;
-                int road_max = road.mapSize;
-
-                // Console.WriteLine("simulatioin start: ");
-                // simulation
-                while (Now <= Sim_Time)
-                {
-                    double TempNow = Now * 10;
-                    int TempNow2 = (int)TempNow;
-
-
-                    if (Opt_PED_MobilityModel == 1)
+                    else if (Opt_PED_MobilityModel == 1)
                     {
-                        List<object[]> temp_filtered_fcd_output = new List<object[]>();
 
-                        int rows = pedestrian_fcd_output.GetLength(0);
-                        int columns = pedestrian_fcd_output.GetLength(1);
+                        // Here!!!!!!!!
+                        // (0) Initialization of camera instance.(X, 위에 있음)
+                        //cctv_fcd_output = new double[N_CCTV, 2]; 위에다  먼저 초기화 해버린 실수.. 고칠 예정
 
-                        // 조건에 맞는 행들을 찾아 List에 추가
-                        //240827 김단하, 이 부분 알고리즘 공부하기
-                        for (int i = 0; i < rows; i++)
+                        setCCTV_FromArray(N_CCTV, cctv_fcd_output);
+
+                        Console.WriteLine($" CCTV {i}, X  {cctvs[i].X} ");
+                        Console.WriteLine($" CCTV {i}, Y {cctvs[i].Y} ");
+
+                        // (1) Set Camera location (deploy camera)
+                        // (2) Set Viewing Angle in Horizontal domain.(random 0~360)
+                        cctvs[i].setViewAngleH(rand.Next(45, 66));
+                        Console.WriteLine($" the horizontal angle of CCTV {i}, {cctvs[i].ViewAngleH} ");
+                        // setCCTV_FromArray(n_cctv,  cctvCoordinates);
+
+
+                    }
+
+                // cctvs[i].setViewAngleH(rand.Next(4) * 90);
+                // cctvs[i].setViewAngleV(-35 - 20 * rand.NextDouble());
+                cctvs[i].setViewAngleV(-45.0 * Math.PI / 180);   // (23-02-02) modified by 0BoO, deg -> rad
+
+
+                cctvs[i].setFixMode(true); // default (rotate)
+
+                cctvs[i].H_AOV = 2 * Math.Atan(WD / (2 * Lens_FocalLength));
+                cctvs[i].V_AOV = 2 * Math.Atan(HE / (2 * Lens_FocalLength));
+
+                cctvs[i].calcBlindToPed();          // (23-02-01) added by 0BoO
+                cctvs[i].calcEffDistToPed(3000);     // (23-02-01) added by 0BoO, input value is 3000mm(3meter)
+
+                // 기기 성능상의 최대 감시거리 (임시값)
+                cctvs[i].Max_Dist = cctvs[i].Eff_Dist_To;//50 * 100 * 10; // 50m (milimeter)
+                                                         // cctvs[i].Max_Dist = 500 * 100 * 100; // 500m (milimeter)
+                int L_Dist = (int)(cctvs[i].Eff_Dist_To - cctvs[i].Eff_Dist_From);
+                double[] Dist2 = new double[L_Dist];
+
+                for (int j = 1; j < L_Dist; j++)
+                {
+                    Dist2[j] = cctvs[i].Eff_Dist_From + j;
+                }
+
+                cctvs[i].detectedPedIndex = new List<int>();
+
+                // Line 118~146
+                /*  여기부턴 Road_Builder 관련 정보가 없으면 의미가 없을거같아서 주석처리했어용..
+                    그리고 get_Sectoral_Coverage 이런함수도 지금은 구현해야할지 애매해서..?
+                */
+
+                cctvs[i]
+                    .get_PixelDensity(Dist2,
+                    cctvs[i].WD,
+                    cctvs[i].HE,
+                    cctvs[i].Focal_Length,
+                    cctvs[i].imW,
+                    cctvs[i].imH);
+
+                cctvs[i].get_H_FOV(Dist2, cctvs[i].WD, cctvs[i].Focal_Length, cctvs[i].ViewAngleH, cctvs[i].X, cctvs[i].Y);
+                cctvs[i].get_V_FOV(Dist2, cctvs[i].HE, cctvs[i].Focal_Length, cctvs[i].ViewAngleV, cctvs[i].X, cctvs[i].Z);
+                // cctvs[i].printCCTVInfo();
+
+                //cctvs[i].calcBlindToPed();          // (23-02-01) added by 0BoO
+                //cctvs[i].calcEffDistToPed(3000);     // (23-02-01) added by 0BoO, input value is 3000mm(3meter)
+            }
+
+            /* -------------------------------------------
+            *  도로 정보 생성 + 보행자/CCTV 초기화 끝
+            ------------------------------------------- */
+            // 600초
+            double Sim_Time = 10; // unit: sec
+                                  //double Now = 10; 
+            double Now = 0; // 240831 김단하
+
+            // Console.WriteLine(">>> Simulating . . . \n");
+            int[] R_Surv_Time = new int[N_Ped]; // 탐지 
+            int[] directionError = new int[N_Ped]; // 방향 미스
+            int[] outOfRange = new int[N_Ped]; // 거리 범위 밖
+            double[] minSpatialResolution = new double[N_Ped];  // the cummulative spatial resolution(min)
+            double[] maxSpatialResolution = new double[N_Ped];  // the cummulative spatial resolution(max)
+
+            string[] traffic_x = new string[(int)(Sim_Time / aUnitTime)]; // csv 파일 출력 위한 보행자별 x좌표
+            string[] traffic_y = new string[(int)(Sim_Time / aUnitTime)]; // csv 파일 출력 위한 보행자별 y좌표
+            string[] detection = new string[(int)(Sim_Time / aUnitTime)]; // csv 파일 출력 위한 추적여부
+            string header = "";
+
+            int road_min = 0;
+            int road_max = road.mapSize;
+
+            // Console.WriteLine("simulatioin start: ");
+            // simulation
+            while (Now <= Sim_Time)
+            {
+                double TempNow = Now * 10;
+                int TempNow2 = (int)TempNow;
+
+
+                if (Opt_PED_MobilityModel == 1)
+                {
+                    List<object[]> temp_filtered_fcd_output = new List<object[]>();
+
+                    int rows = pedestrian_fcd_output.GetLength(0);
+                    int columns = pedestrian_fcd_output.GetLength(1);
+
+                    // 조건에 맞는 행들을 찾아 List에 추가
+                    //240827 김단하, 이 부분 알고리즘 공부하기
+                    for (int i = 0; i < rows; i++)
+                    {
+                        double temptarget_time = (double)pedestrian_fcd_output[i, 0] * 10;
+                        int target_time = (int)temptarget_time;
+                        if (target_time == TempNow2) // 첫 번째 열의 값이 현재 time과 일치하는 경우
                         {
-                            double temptarget_time = (double)pedestrian_fcd_output[i, 0] * 10;
-                            int target_time = (int)temptarget_time;
-                            if (target_time == TempNow2) // 첫 번째 열의 값이 현재 time과 일치하는 경우
-                            {
-                                object[] row = new object[columns];
-                                for (int j = 0; j < columns; j++)
-                                {
-                                    row[j] = pedestrian_fcd_output[i, j]; // 행을 새로운 배열로 복사
-                                }
-                                temp_filtered_fcd_output.Add(row);
-                            }
-                        }
-
-                        // / 필터링된 행들을 2차원 배열로 변환
-                        object[,] filtered_fcd_output = new object[temp_filtered_fcd_output.Count, columns];
-
-                        for (int i = 0; i < temp_filtered_fcd_output.Count; i++)
-                        {
+                            object[] row = new object[columns];
                             for (int j = 0; j < columns; j++)
                             {
-                                filtered_fcd_output[i, j] = temp_filtered_fcd_output[i][j];
+                                row[j] = pedestrian_fcd_output[i, j]; // 행을 새로운 배열로 복사
                             }
+                            temp_filtered_fcd_output.Add(row);
                         }
+                    }
 
-                        //static void update_Pedestrian(ref Pedestrian[] peds, double time)
+                    // / 필터링된 행들을 2차원 배열로 변환
+                    object[,] filtered_fcd_output = new object[temp_filtered_fcd_output.Count, columns];
 
-                        // 240903 단위 시간 별로 호출해야 해.
-                        update_Pedestrian(ref peds, filtered_fcd_output);
+                    for (int i = 0; i < temp_filtered_fcd_output.Count; i++)
+                    {
+                        for (int j = 0; j < columns; j++)
+                        {
+                            filtered_fcd_output[i, j] = temp_filtered_fcd_output[i][j];
+                        }
+                    }
 
-                        /*                    // 결과 출력
-                                            Console.WriteLine("Filtered Array:");
-                                            for (int i = 0; i < filtered_fcd_output.GetLength(0); i++)
+                    //static void update_Pedestrian(ref Pedestrian[] peds, double time)
+
+                    // 240903 단위 시간 별로 호출해야 해.
+                    update_Pedestrian(ref peds, filtered_fcd_output);
+
+                    /*                    // 결과 출력
+                                        Console.WriteLine("Filtered Array:");
+                                        for (int i = 0; i < filtered_fcd_output.GetLength(0); i++)
+                                        {
+                                            for (int j = 0; j < filtered_fcd_output.GetLength(1); j++)
                                             {
-                                                for (int j = 0; j < filtered_fcd_output.GetLength(1); j++)
-                                                {
-                                                    Console.Write(filtered_fcd_output[i, j] + "\t");
-                                                }
-                                                Console.WriteLine();
-                                            }*/
+                                                Console.Write(filtered_fcd_output[i, j] + "\t");
+                                            }
+                                            Console.WriteLine();
+                                        }*/
 
-                    }
+                }
 
 
-                    if (Opt_PED_MobilityModel == 0)
+                if (Opt_PED_MobilityModel == 0)
+                {
+
+                    // update_Pedestrian(ref peds, filtered_fcd_output); 와 같은 기능이 있어야 한다.
+
+
+                }
+
+                int[] res = checkDetection_ParFor(N_CCTV, N_Ped); // 240924 김단하, 본 checkDetection은 Opt_PED_MobilityModel 옵션이 무엇이든 항상 실행한다.
+
+                //Console.WriteLine(".");
+                // 추적 검사'
+                // threading.. error
+                // int[] res = new int[N_Ped];
+
+                // Thread ThreadForWork = new Thread( () => { res = checkDetection(N_CCTV, N_Ped); });     
+                // ThreadForWork.Start();
+
+                //(NOTE 23-05-24) parfor 처리함
+                //for (int i = 0; i < res.Length; i++)
+                //{
+                //    detection[i] += Convert.ToString(res[i]) + ",";
+
+                //    if (res[i] == 0) outOfRange[i]++;
+                //    else if (res[i] == -1) { outOfRange[i]++; directionError[i]++; }
+                //    else if (res[i] == 1) R_Surv_Time[i]++;
+                //}
+                Parallel.For(0, res.Length, i =>
+                {
+
+                    detection[i] += Convert.ToString(res[i]) + ",";
+
+                    if (res[i] == 0)
                     {
-                        // update_Pedestrian(ref peds, filtered_fcd_output); 와 같은 기능이 있어야 한다.
-
-
+                        Interlocked.Increment(ref outOfRange[i]);
                     }
-
-                    int[] res = checkDetection_ParFor(N_CCTV, N_Ped); // 240924 김단하, 본 checkDetection은 Opt_PED_MobilityModel 옵션이 무엇이든 항상 실행한다.
-
-
-                    //Console.WriteLine(".");
-                    // 추적 검사'
-                    // threading.. error
-                    // int[] res = new int[N_Ped];
-
-                    // Thread ThreadForWork = new Thread( () => { res = checkDetection(N_CCTV, N_Ped); });     
-                    // ThreadForWork.Start();
-
-                    //(NOTE 23-05-24) parfor 처리함
-                    //for (int i = 0; i < res.Length; i++)
-                    //{
-                    //    detection[i] += Convert.ToString(res[i]) + ",";
-
-                    //    if (res[i] == 0) outOfRange[i]++;
-                    //    else if (res[i] == -1) { outOfRange[i]++; directionError[i]++; }
-                    //    else if (res[i] == 1) R_Surv_Time[i]++;
-                    //}
-                    Parallel.For(0, res.Length, i =>
-                        {
-
-                            detection[i] += Convert.ToString(res[i]) + ",";
-
-                            if (res[i] == 0)
-                            {
-                                Interlocked.Increment(ref outOfRange[i]);
-                            }
-                            else if (res[i] == -1)
-                            {
-                                Interlocked.Increment(ref outOfRange[i]);
-                                Interlocked.Increment(ref directionError[i]);
-                            }
-                            else if (res[i] == 1)
-                            {
-                                Interlocked.Increment(ref R_Surv_Time[i]);
-                            }
-                        });
-                    if (Opt_Log)
+                    else if (res[i] == -1)
                     {
-                        //DateTime now = DateTime.Now; // 현재 시간 얻기  
-                        //Console.WriteLine("현재 시간: " + now.ToString()); // 현재 시간 출력
-
-                        StreamWriter writer;
-                        writer = File.AppendText("log_Events.out");
-
-                        for (int j = 0; j < N_Ped; j++)
-                        {
-                            for (int i = 0; i < N_CCTV; i++)
-                            {
-                                if (peds[j].Spatial_Resolution[i, 0] != 0)
-                                {
-                                    writer.WriteLine("{0:F5} {1:D} {2:D} {3:D} {4:F3} {5:F3} {6:F3} {7:F3} {8:F3} {9:F3} {10:F3} {11:F3} {12:F3} {13:F3}",
-                                        Now, j, i
-                                        , (int)peds[j].Spatial_Resolution[i, 0]
-                                        , peds[j].Spatial_Resolution[i, 1]
-                                        , peds[j].Spatial_Resolution[i, 2]
-                                        , peds[j].Spatial_Resolution[i, 3]
-                                        , peds[j].Spatial_Resolution[i, 4]
-                                        , peds[j].Spatial_Resolution[i, 5]
-                                        , peds[j].Spatial_Resolution[i, 6]
-                                        , peds[j].Spatial_Resolution[i, 7]
-                                        , peds[j].Spatial_Resolution[i, 8]
-                                        , peds[j].Spatial_Resolution[i, 9]
-                                        , peds[j].Spatial_Resolution[i, 10]);
-
-
-                                }
-
-
-                            }
-                        }
-                        writer.Close();
+                        Interlocked.Increment(ref outOfRange[i]);
+                        Interlocked.Increment(ref directionError[i]);
                     }
+                    else if (res[i] == 1)
+                    {
+                        Interlocked.Increment(ref R_Surv_Time[i]);
+                    }
+                });
+                if (Opt_Log)
+                {
+                    //DateTime now = DateTime.Now; // 현재 시간 얻기  
+                    //Console.WriteLine("현재 시간: " + now.ToString()); // 현재 시간 출력
+
+                    StreamWriter writer;
+                    writer = File.AppendText("log_Events.out");
 
                     for (int j = 0; j < N_Ped; j++)
                     {
-                        double Temp_min_SR = peds[j].Spatial_Resolution[0, 9];
-                        double Temp_max_SR = peds[j].Spatial_Resolution[0, 10];
-
-                        for (int i = 1; i < N_CCTV; i++)
-                        {
-
-
-                            if (peds[j].Spatial_Resolution[i, 0] != 0)
-                            {
-                                if (peds[j].Spatial_Resolution[i, 9] < Temp_min_SR)
-                                {
-                                    Temp_min_SR = peds[j].Spatial_Resolution[i, 9];
-                                }
-
-                                if (peds[j].Spatial_Resolution[i, 10] > Temp_max_SR)
-                                {
-                                    Temp_max_SR = peds[j].Spatial_Resolution[i, 10];
-                                }
-
-                            }
-
-
-                        }
-
-                        minSpatialResolution[j] += Temp_min_SR;
-                        maxSpatialResolution[j] += Temp_max_SR;
-                    }
-                    /* 220407 
-                     * 보행자 방향 따라 CCTV 회전 제어
-                     * 각 보행자가 탐지/미탐지 여부를 넘어서
-                     * 특정 CCTV가 지금 탐지한 보행자의 정보를 알아야함
-                     * 그래야 보행자의 범위 내 위치, 방향을 읽어서
-                     * 보행자의 이동 방향으로 CCTV 회전 여부, 회전 시 방향 및 각도 설정 가능
-                    */
-
-                    // 이동, (NOTE 23-05-04) parfor 사용에 따라 동일 기능을 하는 블록을 제거함
-                    //for (int i = 0; i < peds.Length; i++)
-                    //{
-                    //    if (peds[i].X < road_min || peds[i].X > road_max)
-                    //    {
-                    //        traffic_x[i] += "Out of range,";
-                    //    }
-                    //    else
-                    //    {
-                    //        traffic_x[i] += Math.Round(peds[i].X, 2) + ",";
-                    //    }
-
-                    //    if (peds[i].Y < road_min || peds[i].Y > road_max)
-                    //    {
-                    //        traffic_y[i] += "Out of range,";
-                    //    }
-                    //    else
-                    //    {
-                    //        traffic_y[i] += Math.Round(peds[i].Y, 2) + ",";
-                    //    }
-
-                    //    peds[i].move();
-                    //}
-
-                    // (NOTE 23-05-04) parfor 사용으로 변경함
-                    Parallel.For(0, peds.Length, i =>
-                    {
-                        if (peds[i].X < road_min || peds[i].X > road_max)
-                        {
-                            traffic_x[i] += "Out of range,";
-                        }
-                        else
-                        {
-                            traffic_x[i] += Math.Round(peds[i].X, 2) + ",";
-                        }
-
-                        if (peds[i].Y < road_min || peds[i].Y > road_max)
-                        {
-                            traffic_y[i] += "Out of range,";
-                        }
-                        else
-                        {
-                            traffic_y[i] += Math.Round(peds[i].Y, 2) + ",";
-                        }
-
-                        peds[i].move();
-                    });
-
-                    // 220317 cctv rotation
-                    if (cctv_rotate_degree > 0)
-                    {
                         for (int i = 0; i < N_CCTV; i++)
                         {
-                            // 220331 rotate 후 fov 재계산
-                            // 30초마다 한바퀴 돌도록 -> 7.5초마다 90도
-                            // Now는 현재 simulation 수행 경과 시간
-                            // 360/cctv_rotate_degree = 4
-                            // 30/4 = 7.5
-                            if (Math.Round(Now, 2) % Math.Round(rotateTerm / (360.0 / cctv_rotate_degree), 2) == 0)
+                            if (peds[j].Spatial_Resolution[i, 0] != 0)
                             {
-                                // cctv.setFixMode(false)로 설정해줘야함!
-                                // Console.WriteLine("[Rotate] Now: {0}, Degree: {1}", Math.Round(Now, 2), cctvs[i].ViewAngleH);
-                                cctvs[i].rotateHorizon(cctv_rotate_degree); // 90
-                                                                            // 회전후 수평 FOV update (지금은 전부 Update -> 시간 오래걸림 -> 일부만(일부FOV구성좌표만)해야할듯)
-                                if (!cctvs[i].isFixed)
-                                    cctvs[i].get_H_FOV(Dist, cctvs[i].WD, cctvs[i].Focal_Length, cctvs[i].ViewAngleH, cctvs[i].X, cctvs[i].Y);
+                                writer.WriteLine("{0:F5} {1:D} {2:D} {3:D} {4:F3} {5:F3} {6:F3} {7:F3} {8:F3} {9:F3} {10:F3} {11:F3} {12:F3} {13:F3}",
+                                    Now, j, i
+                                    , (int)peds[j].Spatial_Resolution[i, 0]
+                                    , peds[j].Spatial_Resolution[i, 1]
+                                    , peds[j].Spatial_Resolution[i, 2]
+                                    , peds[j].Spatial_Resolution[i, 3]
+                                    , peds[j].Spatial_Resolution[i, 4]
+                                    , peds[j].Spatial_Resolution[i, 5]
+                                    , peds[j].Spatial_Resolution[i, 6]
+                                    , peds[j].Spatial_Resolution[i, 7]
+                                    , peds[j].Spatial_Resolution[i, 8]
+                                    , peds[j].Spatial_Resolution[i, 9]
+                                    , peds[j].Spatial_Resolution[i, 10]);
+
+
                             }
+
+
                         }
                     }
+                    writer.Close();
+                }
 
-                    if (Opt_Observation)
+                for (int j = 0; j < N_Ped; j++)
+                {
+                    double Temp_min_SR = peds[j].Spatial_Resolution[0, 9];
+                    double Temp_max_SR = peds[j].Spatial_Resolution[0, 10];
+
+                    for (int i = 1; i < N_CCTV; i++)
                     {
-                        MLApp.MLApp matlab = new MLApp.MLApp();
 
-                        // fixed components
-                        if (Now == 0)
+
+                        if (peds[j].Spatial_Resolution[i, 0] != 0)
                         {
-                            matlab.Execute(@"cd 'D:\Google 드라이브\Temporary Working\연구관련\CCTV 운용 시뮬레이션\Surveillance System (C#)\2021-2_SurveillanceSystem-main\surveillance_system\src\matlab_code'");
-                            //matlab.Execute(@"cd 'C:\Users\0bookim\내 드라이브\Temporary Working\연구관련\CCTV 운용 시뮬레이션\Surveillance System (C#)\2021-2_SurveillanceSystem-main\surveillance_system\src\matlab_code'");
-
-                            //double opt_precesionBorderLine = 0.001;
-                            matlab.Execute(@"clear all;");
-                            matlab.Execute(@"close all;");
-                            matlab.Execute(@"figure;");
-                            matlab.Execute(@"hold on;");
-
-                            for (int i = 0; i < N_CCTV; i++)
+                            if (peds[j].Spatial_Resolution[i, 9] < Temp_min_SR)
                             {
-                                matlab.PutWorkspaceData("H_AOV", "base", cctvs[i].H_AOV);
-                                matlab.PutWorkspaceData("ViewAngleH", "base", cctvs[i].ViewAngleH);
-                                matlab.PutWorkspaceData("X", "base", cctvs[i].X);
-                                matlab.PutWorkspaceData("Y", "base", cctvs[i].Y);
-                                matlab.PutWorkspaceData("R_blind", "base", cctvs[i].Eff_Dist_From);
-                                matlab.PutWorkspaceData("R_eff", "base", cctvs[i].Eff_Dist_To);
-
-                                matlab.PutWorkspaceData("i", "base", i);
-
-                                matlab.PutWorkspaceData("CCTV_H_FOV_X0", "base", cctvs[i].H_FOV.X0);
-                                matlab.PutWorkspaceData("CCTV_H_FOV_X1", "base", cctvs[i].H_FOV.X1);
-                                matlab.PutWorkspaceData("CCTV_H_FOV_X2", "base", cctvs[i].H_FOV.X2);
-
-                                matlab.PutWorkspaceData("CCTV_H_FOV_Y0", "base", cctvs[i].H_FOV.Y0);
-                                matlab.PutWorkspaceData("CCTV_H_FOV_Y1", "base", cctvs[i].H_FOV.Y1);
-                                matlab.PutWorkspaceData("CCTV_H_FOV_Y2", "base", cctvs[i].H_FOV.Y2);
-
-
-                                matlab.Execute(@"[BorderLine_blind, BorderLine_eff, X, Y] = get_Sectoral_Coverage_CS(H_AOV, ViewAngleH, X, Y, R_blind, R_eff);");
-                                //matlab.Execute(@"X = cast(X,"double"); Y = cast(Y, "double");");
-                                matlab.Execute(@"plot(X, Y, 'o','MarkerFaceColor','red', 'MarkerEdgeColor','Blue');");
-                                matlab.Execute(@"text(X, Y, num2str(i));");
-
-                                matlab.Execute(@"plot(CCTV_H_FOV_X0, CCTV_H_FOV_Y0, '--');");
-                                matlab.Execute(@"plot(CCTV_H_FOV_X1, CCTV_H_FOV_Y1);");
-                                matlab.Execute(@"plot(CCTV_H_FOV_X2, CCTV_H_FOV_Y2)");
-
-
-                                matlab.Execute(@"BorderLine_blind_X(1,:) = BorderLine_blind(:,1);");
-                                matlab.Execute(@"BorderLine_blind_Y(1,:) = BorderLine_blind(:,2);");
-
-                                matlab.Execute(@"BorderLine_eff_X(1,:) = BorderLine_eff(:,1);");
-                                matlab.Execute(@"BorderLine_eff_Y(1,:) = BorderLine_eff(:,2);");
-
-                                matlab.Execute(@"plot(BorderLine_blind_X(1,:), BorderLine_blind_Y(1,:));");
-                                matlab.Execute(@"plot(BorderLine_eff_X(1,:), BorderLine_eff_Y(1,:)); ");
-                            }
-                            int L_DST_row = road.DST.GetLength(0);
-                            //int L_DST_col = road.DST.GetLength(1);
-
-                            for (int j = 0; j < L_DST_row; j++)
-                            {
-
-                                matlab.PutWorkspaceData("DST_X", "base", road.DST[j, 0]);
-                                matlab.PutWorkspaceData("DST_Y", "base", road.DST[j, 1]);
-                                matlab.Execute(@"plot(DST_X, DST_Y, 'p');");
-
-                            }
-                            int L_intersection_row = road.intersectionArea.GetLength(0);
-                            //int L_intersection_col = road.intersectionArea.GetLength(1);
-                            for (int j = 0; j < L_intersection_row; j++)
-                            {
-
-                                matlab.PutWorkspaceData("intersection_X1", "base", road.intersectionArea[j, 0]);
-                                matlab.PutWorkspaceData("intersection_Y1", "base", road.intersectionArea[j, 2]);
-                                matlab.PutWorkspaceData("intersection_X2", "base", road.intersectionArea[j, 1]);
-                                matlab.PutWorkspaceData("intersection_Y2", "base", road.intersectionArea[j, 3]);
-                                //matlab.Execute(@"plot([intersection_X1 intersection_X2],[intersection_Y1 intersection_Y2], 'k.-');");
-
+                                Temp_min_SR = peds[j].Spatial_Resolution[i, 9];
                             }
 
-                            int L_roadVector = road.laneVector.Length;
-                            int L_roadLaneH = road.lane_h.GetLength(0);
-                            int L_roadLaneV = road.lane_v.GetLength(0);
-
-                            matlab.PutWorkspaceData("lane_vector", "base", road.laneVector);
-
-
-                            for (int h = 0; h < L_roadLaneH; h++)
+                            if (peds[j].Spatial_Resolution[i, 10] > Temp_max_SR)
                             {
-                                matlab.PutWorkspaceData("lane_h", "base", road.lane_h[h, 0]);
-                                matlab.PutWorkspaceData("lane_h_upper", "base", road.lane_h_upper[h, 0]);
-                                matlab.PutWorkspaceData("lane_h_lower", "base", road.lane_h_lower[h, 0]);
-
-                                matlab.Execute(@"LANE_H = ones(1,length(lane_vector))*lane_h;");
-                                matlab.Execute(@"LANE_HU = ones(1,length(lane_vector))*lane_h_upper;");
-                                matlab.Execute(@"LANE_HL = ones(1,length(lane_vector))*lane_h_lower;");
-
-                                matlab.Execute(@"plot(lane_vector,LANE_H,'--');");
-                                matlab.Execute(@"plot(lane_vector,LANE_HU,'-');");
-                                matlab.Execute(@"plot(lane_vector,LANE_HL,'-');");
+                                Temp_max_SR = peds[j].Spatial_Resolution[i, 10];
                             }
 
-                            for (int v = 0; v < L_roadLaneV; v++)
-                            {
-                                matlab.PutWorkspaceData("lane_v", "base", road.lane_v[v, 0]);
-                                matlab.PutWorkspaceData("lane_v_left", "base", road.lane_v_left[v, 0]);
-                                matlab.PutWorkspaceData("lane_v_right", "base", road.lane_v_right[v, 0]);
-
-                                matlab.Execute(@"LANE_V = ones(1,length(lane_vector))*lane_v;");
-                                matlab.Execute(@"LANE_VL = ones(1,length(lane_vector))*lane_v_left;");
-                                matlab.Execute(@"LANE_VR = ones(1,length(lane_vector))*lane_v_right;");
-
-                                matlab.Execute(@"plot(LANE_V,lane_vector,'--');");
-                                matlab.Execute(@"plot(LANE_VL,lane_vector,'-');");
-                                matlab.Execute(@"plot(LANE_VR,lane_vector,'-');");
-                            }
-
-                            matlab.Execute(@"grid on;");
-                            matlab.Execute(@"xlabel('X-axis(mm)');ylabel('Y-axis(mm)')");
                         }
 
 
-
-                        // variable components
-                        // pedestrians
-
-                        for (int j = 0; j < N_Ped; j++)
-                        {
-                            matlab.PutWorkspaceData("Pos_H1", "base", peds[j].Pos_H1);
-                            matlab.PutWorkspaceData("Pos_H2", "base", peds[j].Pos_H2);
-                            matlab.PutWorkspaceData("Pos_V1", "base", peds[j].Pos_V1);
-                            matlab.PutWorkspaceData("Pos_V2", "base", peds[j].Pos_V2);
-
-                            matlab.Execute(@"plot([Pos_H1(1) Pos_H2(1)], [Pos_H1(2) Pos_H2(2)], 's-');");
-                        }
-
-                        matlab.PutWorkspaceData("Now", "base", Now);
-                        matlab.Execute(@"title(['Time = ', num2str(Now), ' sec'] );");
-                        matlab.Execute(@"pause(0.1);");
-                        // (TBD) performance
                     }
 
-                    if (Opt_Demo)
+                    minSpatialResolution[j] += Temp_min_SR;
+                    maxSpatialResolution[j] += Temp_max_SR;
+                }
+                /* 220407 
+                 * 보행자 방향 따라 CCTV 회전 제어
+                 * 각 보행자가 탐지/미탐지 여부를 넘어서
+                 * 특정 CCTV가 지금 탐지한 보행자의 정보를 알아야함
+                 * 그래야 보행자의 범위 내 위치, 방향을 읽어서
+                 * 보행자의 이동 방향으로 CCTV 회전 여부, 회전 시 방향 및 각도 설정 가능
+                */
+
+                // 이동, (NOTE 23-05-04) parfor 사용에 따라 동일 기능을 하는 블록을 제거함
+                //for (int i = 0; i < peds.Length; i++)
+                //{
+                //    if (peds[i].X < road_min || peds[i].X > road_max)
+                //    {
+                //        traffic_x[i] += "Out of range,";
+                //    }
+                //    else
+                //    {
+                //        traffic_x[i] += Math.Round(peds[i].X, 2) + ",";
+                //    }
+
+                //    if (peds[i].Y < road_min || peds[i].Y > road_max)
+                //    {
+                //        traffic_y[i] += "Out of range,";
+                //    }
+                //    else
+                //    {
+                //        traffic_y[i] += Math.Round(peds[i].Y, 2) + ",";
+                //    }
+
+                //    peds[i].move();
+                //}
+
+                // (NOTE 23-05-04) parfor 사용으로 변경함
+                Parallel.For(0, peds.Length, i =>
+                {
+                    if (peds[i].X < road_min || peds[i].X > road_max)
                     {
-                        //var log_FilePath1 = @"log_PED_Position.txt";
-                        //var log_result1 = new StreamWriter(log_FilePath1);
-                        StreamWriter writer;
-                        writer = File.AppendText("log_PED_Position.out");
-
-                        for (int i = 0; i < N_Ped; i++)
-                        {
-                            writer.WriteLine("{0:F} {1:F2} {2:F2} {3:F2} {4:F2}", Now, peds[i].Pos_H1[0], peds[i].Pos_H1[1], peds[i].Pos_H2[0], peds[i].Pos_H2[1]);
-                        }
-
-                        writer.Close();
+                        traffic_x[i] += "Out of range,";
                     }
-
-                    header += Convert.ToString(Math.Round(Now, 1)) + ",";
-                    Now += aUnitTime;
-                }
-                stopwatch.Stop();
-
-                // // create .csv file
-                if (createPedCSV)
-                {
-                    for (int i = 0; i < peds.Length; i++)
+                    else
                     {
-                        string fileName = "ped" + i + ".csv";
-                        using (System.IO.StreamWriter file = new System.IO.StreamWriter(@fileName))
+                        traffic_x[i] += Math.Round(peds[i].X, 2) + ",";
+                    }
+
+                    if (peds[i].Y < road_min || peds[i].Y > road_max)
+                    {
+                        traffic_y[i] += "Out of range,";
+                    }
+                    else
+                    {
+                        traffic_y[i] += Math.Round(peds[i].Y, 2) + ",";
+                    }
+
+                    peds[i].move();
+                });
+
+                // 220317 cctv rotation
+                if (cctv_rotate_degree > 0)
+                {
+                    for (int i = 0; i < N_CCTV; i++)
+                    {
+                        // 220331 rotate 후 fov 재계산
+                        // 30초마다 한바퀴 돌도록 -> 7.5초마다 90도
+                        // Now는 현재 simulation 수행 경과 시간
+                        // 360/cctv_rotate_degree = 4
+                        // 30/4 = 7.5
+                        if (Math.Round(Now, 2) % Math.Round(rotateTerm / (360.0 / cctv_rotate_degree), 2) == 0)
                         {
-                            file.WriteLine(header);
-                            file.WriteLine(traffic_x[i]);
-                            file.WriteLine(traffic_y[i]);
-                            file.WriteLine(detection[i]);
+                            // cctv.setFixMode(false)로 설정해줘야함!
+                            // Console.WriteLine("[Rotate] Now: {0}, Degree: {1}", Math.Round(Now, 2), cctvs[i].ViewAngleH);
+                            cctvs[i].rotateHorizon(cctv_rotate_degree); // 90
+                                                                        // 회전후 수평 FOV update (지금은 전부 Update -> 시간 오래걸림 -> 일부만(일부FOV구성좌표만)해야할듯)
+                            if (!cctvs[i].isFixed)
+                                cctvs[i].get_H_FOV(Dist, cctvs[i].WD, cctvs[i].Focal_Length, cctvs[i].ViewAngleH, cctvs[i].X, cctvs[i].Y);
                         }
                     }
                 }
-                double totalSimCount = Sim_Time / aUnitTime * N_Ped;
 
-                double[] Avg_minSpatialResolution = new double[N_Ped];
-                double[] Avg_maxSpatialResolution = new double[N_Ped];
-
-                for (int i = 0; i < N_Ped; i++)
-                {
-                    Avg_minSpatialResolution[i] = minSpatialResolution[i] / R_Surv_Time[i];
-                    Avg_maxSpatialResolution[i] = maxSpatialResolution[i] / R_Surv_Time[i];
-
-                }
-
-                // 결과(탐지율)
-                Console.WriteLine("====== Surveillance Time Result I ======");
-                Console.WriteLine("N_CCTV: {0}, N_Ped: {1}", N_CCTV, N_Ped);
-                Console.WriteLine("[Result]");
-                Console.WriteLine("  - Execution time : {0}", stopwatch.ElapsedMilliseconds + "ms");
-                Console.WriteLine("[Fail]");
-                Console.WriteLine("  - Out of Range: {0:F2}% ({1}/{2})", 100 * outOfRange.Sum() / totalSimCount, outOfRange.Sum(), totalSimCount);
-                Console.WriteLine("  - Direction Error: {0:F2}% ({1}/{2})", 100 * directionError.Sum() / totalSimCount, directionError.Sum(), totalSimCount);
-                Console.WriteLine("[Success]");
-                Console.WriteLine("  - Surveillance Time: {0:F2}% ({1}/{2})\n", 100 * R_Surv_Time.Sum() / totalSimCount, R_Surv_Time.Sum(), totalSimCount);
-
-                Console.WriteLine("====== Surveillance Time Result II ======");
-                Console.WriteLine(" Simulation Time (sec): {0:F2}", Sim_Time);
-                Console.WriteLine(" [Avg] Out of Range (sec): {0:F2}", outOfRange.Average() * aUnitTime);
-                Console.WriteLine(" [Avg] Direction Error (sec): {0:F2}", directionError.Average() * aUnitTime);
-                Console.WriteLine(" [Avg] Success Time (sec): {0:F2}", R_Surv_Time.Average() * aUnitTime);
-                Console.WriteLine(" [Avg] Spatial Resolution (min): {0:F2}", minSpatialResolution.Average() / Sim_Time);
-                Console.WriteLine(" [Avg] Spatial Resolution (max): {0:F2}", maxSpatialResolution.Average() / Sim_Time);
-                Console.WriteLine(" [Avg] Spatial Resolution (min): {0:F2}", Avg_minSpatialResolution.Average());
-                Console.WriteLine(" [Avg] Spatial Resolution (max): {0:F2}", Avg_maxSpatialResolution.Average());
-
-                string subFolderPath = "Sim_Results";
-                string subFolderPathWithFile = Path.Combine(Directory.GetCurrentDirectory(), subFolderPath);
-                if (!Directory.Exists(subFolderPathWithFile))
-                {
-                    Directory.CreateDirectory(subFolderPathWithFile);
-                }
-                string result_FilePath1 = Path.Combine(subFolderPathWithFile, Sim_ID + "_" + "Result1.out");
-                string result_FilePath2 = Path.Combine(subFolderPathWithFile, Sim_ID + "_" + "Result2.out");
-
-
-                //StreamWriter wt_result1 = new StreamWriter(result_FilePath1);
-                //StreamWriter wt_result2 = new StreamWriter(result_FilePath2);
-
-                using (StreamWriter wt_result1 = File.AppendText(result_FilePath1))
-                {
-                    wt_result1.WriteLine("{1:F6} {2:F6} {0:F6}", R_Surv_Time.Average() * aUnitTime, outOfRange.Average() * aUnitTime, directionError.Average() * aUnitTime);
-                    //wt_result1.Close();
-                }
-                using (StreamWriter wt_result2 = File.AppendText(result_FilePath2))
-                {
-                    for (int i = 0; i < N_Ped; i++)
-                    {
-                        wt_result2.WriteLine("{3} {4} {1:F2} {2:F2} {0:F2}", R_Surv_Time[i] * aUnitTime, outOfRange[i] * aUnitTime, directionError[i] * aUnitTime, randSeedList[idx_sim], i);
-                    }
-                    //wt_result2.Close();
-                }
-
-
-
-                // 결과(시간)
-                // Console.WriteLine("Execution time : {0}", stopwatch.ElapsedMilliseconds + "ms");
-                // accTime += stopwatch.ElapsedMilliseconds;
-
-                // Console.WriteLine("\n============ RESULT ============");
-                // Console.WriteLine("CCTV: {0}, Ped: {1}", N_CCTV, N_Ped);
-                // Console.WriteLine("Execution time : {0}\n", (accTime / 1000.0 ) + " sec");
-                string subFolderPath1 = "Sim_Results";
-                string subFolderPathWithFile1 = Path.Combine(Directory.GetCurrentDirectory(), subFolderPath1);
-                if (!Directory.Exists(subFolderPathWithFile1))
-                {
-                    Directory.CreateDirectory(subFolderPathWithFile1);
-                }
-                string excelFilePath = Path.Combine(subFolderPathWithFile1, "Sim_Results.xlsx");
-
-                FileInfo excelResultFile = new FileInfo(excelFilePath);
-                ExcelPackage excelPackage;
-
-                if (excelResultFile.Exists)
-                {
-                    // 기존 파일이 있는 경우 로드
-                    excelPackage = new ExcelPackage(excelResultFile);
-                }
-                else
-                {
-                    // 새로운 파일인 경우 생성
-                    excelPackage = new ExcelPackage(excelResultFile);
-                }
-
-                // 기존 시트 확인
-                ExcelWorksheet worksheet;
-                if (excelPackage.Workbook.Worksheets.Any(x => x.Name == Sim_ID))
-                {
-                    // 기존 시트가 있는 경우 해당 시트 가져오기
-                    worksheet = excelPackage.Workbook.Worksheets[Sim_ID];
-                }
-                else
-                {
-                    // 기존 시트가 없는 경우 새로운 시트 생성
-                    worksheet = excelPackage.Workbook.Worksheets.Add(Sim_ID);
-                }
-
-
-                worksheet.Cells["A1"].Value = "seed";
-                worksheet.Cells["B1"].Value = "Out of range (sec)";
-                worksheet.Cells["C1"].Value = "Direction error (sec)";
-                worksheet.Cells["D1"].Value = "Success (sec)";
-                worksheet.Cells["E1"].Value = "minSpatialResolution";
-                worksheet.Cells["F1"].Value = "maxSpatialResolution";
-
-                int TargetCellCol = idx_sim + 2;
-                worksheet.Cells["A" + TargetCellCol as string].Value = randSeedList[idx_sim];
-                worksheet.Cells["B" + TargetCellCol as string].Value = outOfRange.Average() * aUnitTime;
-                worksheet.Cells["C" + TargetCellCol as string].Value = directionError.Average() * aUnitTime;
-                worksheet.Cells["D" + TargetCellCol as string].Value = R_Surv_Time.Average() * aUnitTime;
-                worksheet.Cells["E" + TargetCellCol as string].Value = minSpatialResolution.Average() / Sim_Time;
-                worksheet.Cells["F" + TargetCellCol as string].Value = maxSpatialResolution.Average() / Sim_Time;
-
-                if (idx_sim == numSim - 1)
-                {
-                    TargetCellCol = TargetCellCol + 1;
-                    worksheet.Cells["B" + TargetCellCol as string].Formula = "AVERAGE(B2:B" + (TargetCellCol - 1) as string + ")";
-                    worksheet.Cells["C" + TargetCellCol as string].Formula = "AVERAGE(C2:C" + (TargetCellCol - 1) as string + ")";
-                    worksheet.Cells["D" + TargetCellCol as string].Formula = "AVERAGE(D2:D" + (TargetCellCol - 1) as string + ")";
-                    worksheet.Cells["E" + TargetCellCol as string].Formula = "AVERAGE(E2:E" + (TargetCellCol - 1) as string + ")";
-                    worksheet.Cells["F" + TargetCellCol as string].Formula = "AVERAGE(F2:F" + (TargetCellCol - 1) as string + ")";
-                }
-                //var file = new System.IO.FileInfo("Sim_Results.xlsx");
-                excelPackage.Save();
-
-
-
-                if (On_Visualization)
+                if (Opt_Observation)
                 {
                     MLApp.MLApp matlab = new MLApp.MLApp();
 
-                    matlab.Execute(@"cd 'D:\Google 드라이브\Temporary Working\연구관련\CCTV 운용 시뮬레이션\Surveillance System (C#)\2021-2_SurveillanceSystem-main\surveillance_system\src\matlab_code'");
-                    //matlab.Execute(@"cd 'C:\Users\0bookim\내 드라이브\Temporary Working\연구관련\CCTV 운용 시뮬레이션\Surveillance System (C#)\2021-2_SurveillanceSystem-main\surveillance_system\src\matlab_code'");
-
-                    double[] X1;
-                    double[] Y1;
-                    double[] X2;
-                    double[] Y2;
-
-                    //double opt_precesionBorderLine = 0.001;
-                    matlab.Execute(@"clear all;");
-                    matlab.Execute(@"close all;");
-                    matlab.Execute(@"figure;");
-                    matlab.Execute(@"hold on;");
-
-                    for (int i = 0; i < N_CCTV; i++)
+                    // fixed components
+                    if (Now == 0)
                     {
-                        matlab.PutWorkspaceData("H_AOV", "base", cctvs[i].H_AOV);
-                        matlab.PutWorkspaceData("ViewAngleH", "base", cctvs[i].ViewAngleH);
-                        matlab.PutWorkspaceData("X", "base", cctvs[i].X);
-                        matlab.PutWorkspaceData("Y", "base", cctvs[i].Y);
-                        matlab.PutWorkspaceData("R_blind", "base", cctvs[i].Eff_Dist_From);
-                        matlab.PutWorkspaceData("R_eff", "base", cctvs[i].Eff_Dist_To);
+                        matlab.Execute(@"cd 'D:\Google 드라이브\Temporary Working\연구관련\CCTV 운용 시뮬레이션\Surveillance System (C#)\2021-2_SurveillanceSystem-main\surveillance_system\src\matlab_code'");
+                        //matlab.Execute(@"cd 'C:\Users\0bookim\내 드라이브\Temporary Working\연구관련\CCTV 운용 시뮬레이션\Surveillance System (C#)\2021-2_SurveillanceSystem-main\surveillance_system\src\matlab_code'");
 
-                        matlab.PutWorkspaceData("i", "base", i);
+                        //double opt_precesionBorderLine = 0.001;
+                        matlab.Execute(@"clear all;");
+                        matlab.Execute(@"close all;");
+                        matlab.Execute(@"figure;");
+                        matlab.Execute(@"hold on;");
 
-                        matlab.PutWorkspaceData("CCTV_H_FOV_X0", "base", cctvs[i].H_FOV.X0);
-                        matlab.PutWorkspaceData("CCTV_H_FOV_X1", "base", cctvs[i].H_FOV.X1);
-                        matlab.PutWorkspaceData("CCTV_H_FOV_X2", "base", cctvs[i].H_FOV.X2);
+                        for (int i = 0; i < N_CCTV; i++)
+                        {
+                            matlab.PutWorkspaceData("H_AOV", "base", cctvs[i].H_AOV);
+                            matlab.PutWorkspaceData("ViewAngleH", "base", cctvs[i].ViewAngleH);
+                            matlab.PutWorkspaceData("X", "base", cctvs[i].X);
+                            matlab.PutWorkspaceData("Y", "base", cctvs[i].Y);
+                            matlab.PutWorkspaceData("R_blind", "base", cctvs[i].Eff_Dist_From);
+                            matlab.PutWorkspaceData("R_eff", "base", cctvs[i].Eff_Dist_To);
 
-                        matlab.PutWorkspaceData("CCTV_H_FOV_Y0", "base", cctvs[i].H_FOV.Y0);
-                        matlab.PutWorkspaceData("CCTV_H_FOV_Y1", "base", cctvs[i].H_FOV.Y1);
-                        matlab.PutWorkspaceData("CCTV_H_FOV_Y2", "base", cctvs[i].H_FOV.Y2);
+                            matlab.PutWorkspaceData("i", "base", i);
+
+                            matlab.PutWorkspaceData("CCTV_H_FOV_X0", "base", cctvs[i].H_FOV.X0);
+                            matlab.PutWorkspaceData("CCTV_H_FOV_X1", "base", cctvs[i].H_FOV.X1);
+                            matlab.PutWorkspaceData("CCTV_H_FOV_X2", "base", cctvs[i].H_FOV.X2);
+
+                            matlab.PutWorkspaceData("CCTV_H_FOV_Y0", "base", cctvs[i].H_FOV.Y0);
+                            matlab.PutWorkspaceData("CCTV_H_FOV_Y1", "base", cctvs[i].H_FOV.Y1);
+                            matlab.PutWorkspaceData("CCTV_H_FOV_Y2", "base", cctvs[i].H_FOV.Y2);
 
 
-                        matlab.Execute(@"[BorderLine_blind, BorderLine_eff, X, Y] = get_Sectoral_Coverage_CS(H_AOV, ViewAngleH, X, Y, R_blind, R_eff);");
-                        //matlab.Execute(@"X = cast(X,"double"); Y = cast(Y, "double");");
-                        matlab.Execute(@"plot(X, Y, 'o','MarkerFaceColor','red', 'MarkerEdgeColor','Blue');");
-                        matlab.Execute(@"text(X, Y, num2str(i));");
+                            matlab.Execute(@"[BorderLine_blind, BorderLine_eff, X, Y] = get_Sectoral_Coverage_CS(H_AOV, ViewAngleH, X, Y, R_blind, R_eff);");
+                            //matlab.Execute(@"X = cast(X,"double"); Y = cast(Y, "double");");
+                            matlab.Execute(@"plot(X, Y, 'o','MarkerFaceColor','red', 'MarkerEdgeColor','Blue');");
+                            matlab.Execute(@"text(X, Y, num2str(i));");
 
-                        matlab.Execute(@"plot(CCTV_H_FOV_X0, CCTV_H_FOV_Y0, '--');");
-                        matlab.Execute(@"plot(CCTV_H_FOV_X1, CCTV_H_FOV_Y1);");
-                        matlab.Execute(@"plot(CCTV_H_FOV_X2, CCTV_H_FOV_Y2)");
+                            matlab.Execute(@"plot(CCTV_H_FOV_X0, CCTV_H_FOV_Y0, '--');");
+                            matlab.Execute(@"plot(CCTV_H_FOV_X1, CCTV_H_FOV_Y1);");
+                            matlab.Execute(@"plot(CCTV_H_FOV_X2, CCTV_H_FOV_Y2)");
 
 
-                        matlab.Execute(@"BorderLine_blind_X(1,:) = BorderLine_blind(:,1);");
-                        matlab.Execute(@"BorderLine_blind_Y(1,:) = BorderLine_blind(:,2);");
+                            matlab.Execute(@"BorderLine_blind_X(1,:) = BorderLine_blind(:,1);");
+                            matlab.Execute(@"BorderLine_blind_Y(1,:) = BorderLine_blind(:,2);");
 
-                        matlab.Execute(@"BorderLine_eff_X(1,:) = BorderLine_eff(:,1);");
-                        matlab.Execute(@"BorderLine_eff_Y(1,:) = BorderLine_eff(:,2);");
+                            matlab.Execute(@"BorderLine_eff_X(1,:) = BorderLine_eff(:,1);");
+                            matlab.Execute(@"BorderLine_eff_Y(1,:) = BorderLine_eff(:,2);");
 
-                        matlab.Execute(@"plot(BorderLine_blind_X(1,:), BorderLine_blind_Y(1,:));");
-                        matlab.Execute(@"plot(BorderLine_eff_X(1,:), BorderLine_eff_Y(1,:)); ");
+                            matlab.Execute(@"plot(BorderLine_blind_X(1,:), BorderLine_blind_Y(1,:));");
+                            matlab.Execute(@"plot(BorderLine_eff_X(1,:), BorderLine_eff_Y(1,:)); ");
+                        }
+                        int L_DST_row = road.DST.GetLength(0);
+                        //int L_DST_col = road.DST.GetLength(1);
+
+                        for (int j = 0; j < L_DST_row; j++)
+                        {
+
+                            matlab.PutWorkspaceData("DST_X", "base", road.DST[j, 0]);
+                            matlab.PutWorkspaceData("DST_Y", "base", road.DST[j, 1]);
+                            matlab.Execute(@"plot(DST_X, DST_Y, 'p');");
+
+                        }
+                        int L_intersection_row = road.intersectionArea.GetLength(0);
+                        //int L_intersection_col = road.intersectionArea.GetLength(1);
+                        for (int j = 0; j < L_intersection_row; j++)
+                        {
+
+                            matlab.PutWorkspaceData("intersection_X1", "base", road.intersectionArea[j, 0]);
+                            matlab.PutWorkspaceData("intersection_Y1", "base", road.intersectionArea[j, 2]);
+                            matlab.PutWorkspaceData("intersection_X2", "base", road.intersectionArea[j, 1]);
+                            matlab.PutWorkspaceData("intersection_Y2", "base", road.intersectionArea[j, 3]);
+                            //matlab.Execute(@"plot([intersection_X1 intersection_X2],[intersection_Y1 intersection_Y2], 'k.-');");
+
+                        }
+
+                        int L_roadVector = road.laneVector.Length;
+                        int L_roadLaneH = road.lane_h.GetLength(0);
+                        int L_roadLaneV = road.lane_v.GetLength(0);
+
+                        matlab.PutWorkspaceData("lane_vector", "base", road.laneVector);
+
+
+                        for (int h = 0; h < L_roadLaneH; h++)
+                        {
+                            matlab.PutWorkspaceData("lane_h", "base", road.lane_h[h, 0]);
+                            matlab.PutWorkspaceData("lane_h_upper", "base", road.lane_h_upper[h, 0]);
+                            matlab.PutWorkspaceData("lane_h_lower", "base", road.lane_h_lower[h, 0]);
+
+                            matlab.Execute(@"LANE_H = ones(1,length(lane_vector))*lane_h;");
+                            matlab.Execute(@"LANE_HU = ones(1,length(lane_vector))*lane_h_upper;");
+                            matlab.Execute(@"LANE_HL = ones(1,length(lane_vector))*lane_h_lower;");
+
+                            matlab.Execute(@"plot(lane_vector,LANE_H,'--');");
+                            matlab.Execute(@"plot(lane_vector,LANE_HU,'-');");
+                            matlab.Execute(@"plot(lane_vector,LANE_HL,'-');");
+                        }
+
+                        for (int v = 0; v < L_roadLaneV; v++)
+                        {
+                            matlab.PutWorkspaceData("lane_v", "base", road.lane_v[v, 0]);
+                            matlab.PutWorkspaceData("lane_v_left", "base", road.lane_v_left[v, 0]);
+                            matlab.PutWorkspaceData("lane_v_right", "base", road.lane_v_right[v, 0]);
+
+                            matlab.Execute(@"LANE_V = ones(1,length(lane_vector))*lane_v;");
+                            matlab.Execute(@"LANE_VL = ones(1,length(lane_vector))*lane_v_left;");
+                            matlab.Execute(@"LANE_VR = ones(1,length(lane_vector))*lane_v_right;");
+
+                            matlab.Execute(@"plot(LANE_V,lane_vector,'--');");
+                            matlab.Execute(@"plot(LANE_VL,lane_vector,'-');");
+                            matlab.Execute(@"plot(LANE_VR,lane_vector,'-');");
+                        }
+
+                        matlab.Execute(@"grid on;");
+                        matlab.Execute(@"xlabel('X-axis(mm)');ylabel('Y-axis(mm)')");
                     }
+
+
+
+                    // variable components
+                    // pedestrians
 
                     for (int j = 0; j < N_Ped; j++)
                     {
@@ -1867,86 +1784,329 @@ namespace surveillance_system
                         matlab.Execute(@"plot([Pos_H1(1) Pos_H2(1)], [Pos_H1(2) Pos_H2(2)], 's-');");
                     }
 
-                    int L_DST_row = road.DST.GetLength(0);
-                    //int L_DST_col = road.DST.GetLength(1);
-
-                    for (int j = 0; j < L_DST_row; j++)
-                    {
-
-                        matlab.PutWorkspaceData("DST_X", "base", road.DST[j, 0]);
-                        matlab.PutWorkspaceData("DST_Y", "base", road.DST[j, 1]);
-                        matlab.Execute(@"plot(DST_X, DST_Y, 'p');");
-
-                    }
-                    int L_intersection_row = road.intersectionArea.GetLength(0);
-                    //int L_intersection_col = road.intersectionArea.GetLength(1);
-                    for (int j = 0; j < L_intersection_row; j++)
-                    {
-
-                        matlab.PutWorkspaceData("intersection_X1", "base", road.intersectionArea[j, 0]);
-                        matlab.PutWorkspaceData("intersection_Y1", "base", road.intersectionArea[j, 2]);
-                        matlab.PutWorkspaceData("intersection_X2", "base", road.intersectionArea[j, 1]);
-                        matlab.PutWorkspaceData("intersection_Y2", "base", road.intersectionArea[j, 3]);
-                        //matlab.Execute(@"plot([intersection_X1 intersection_X2],[intersection_Y1 intersection_Y2], 'k.-');");
-
-                    }
-
-                    int L_roadVector = road.laneVector.Length;
-                    int L_roadLaneH = road.lane_h.GetLength(0);
-                    int L_roadLaneV = road.lane_v.GetLength(0);
-
-                    matlab.PutWorkspaceData("lane_vector", "base", road.laneVector);
-
-
-                    for (int h = 0; h < L_roadLaneH; h++)
-                    {
-                        matlab.PutWorkspaceData("lane_h", "base", road.lane_h[h, 0]);
-                        matlab.PutWorkspaceData("lane_h_upper", "base", road.lane_h_upper[h, 0]);
-                        matlab.PutWorkspaceData("lane_h_lower", "base", road.lane_h_lower[h, 0]);
-
-                        matlab.Execute(@"LANE_H = ones(1,length(lane_vector))*lane_h;");
-                        matlab.Execute(@"LANE_HU = ones(1,length(lane_vector))*lane_h_upper;");
-                        matlab.Execute(@"LANE_HL = ones(1,length(lane_vector))*lane_h_lower;");
-
-                        matlab.Execute(@"plot(lane_vector,LANE_H,'--');");
-                        matlab.Execute(@"plot(lane_vector,LANE_HU,'-');");
-                        matlab.Execute(@"plot(lane_vector,LANE_HL,'-');");
-                    }
-
-                    for (int v = 0; v < L_roadLaneV; v++)
-                    {
-                        matlab.PutWorkspaceData("lane_v", "base", road.lane_v[v, 0]);
-                        matlab.PutWorkspaceData("lane_v_left", "base", road.lane_v_left[v, 0]);
-                        matlab.PutWorkspaceData("lane_v_right", "base", road.lane_v_right[v, 0]);
-
-                        matlab.Execute(@"LANE_V = ones(1,length(lane_vector))*lane_v;");
-                        matlab.Execute(@"LANE_VL = ones(1,length(lane_vector))*lane_v_left;");
-                        matlab.Execute(@"LANE_VR = ones(1,length(lane_vector))*lane_v_right;");
-
-                        matlab.Execute(@"plot(LANE_V,lane_vector,'--');");
-                        matlab.Execute(@"plot(LANE_VL,lane_vector,'-');");
-                        matlab.Execute(@"plot(LANE_VR,lane_vector,'-');");
-                    }
-
-                    matlab.Execute(@"grid on;");
-                    matlab.Execute(@"xlabel('X-axis(mm)');ylabel('Y-axis(mm)')");
-                    matlab.Execute(@"hold off;");
-                    //MLApp.MLApp matlab = new MLApp.MLApp();
-                    //matlab.Execute(@"figure;");
-                    //matlab.Execute(@"plot(0:0.01:pi, sin(0:0.01:pi))");
-
+                    matlab.PutWorkspaceData("Now", "base", Now);
+                    matlab.Execute(@"title(['Time = ', num2str(Now), ' sec'] );");
+                    matlab.Execute(@"pause(0.1);");
+                    // (TBD) performance
                 }
-
-
 
                 if (Opt_Demo)
                 {
-                    MLApp.MLApp matlab = new MLApp.MLApp();
-                    //matlab.Execute(@"cd 'D:\Google 드라이브\Temporary Working\연구관련\CCTV 운용 시뮬레이션\Surveillance System (C#)\2021-2_SurveillanceSystem-main\surveillance_system\src\matlab_code'");
-                    matlab.Execute(@"cd 'C:\Users\0bookim\내 드라이브\Temporary Working\연구관련\CCTV 운용 시뮬레이션\Surveillance System (C#)\2021-2_SurveillanceSystem-main\surveillance_system\src\matlab_code'");
-                    matlab.Execute(@"Sim_Demo");
+                    //var log_FilePath1 = @"log_PED_Position.txt";
+                    //var log_result1 = new StreamWriter(log_FilePath1);
+                    StreamWriter writer;
+                    writer = File.AppendText("log_PED_Position.out");
+
+                    for (int i = 0; i < N_Ped; i++)
+                    {
+                        writer.WriteLine("{0:F} {1:F2} {2:F2} {3:F2} {4:F2}", Now, peds[i].Pos_H1[0], peds[i].Pos_H1[1], peds[i].Pos_H2[0], peds[i].Pos_H2[1]);
+                    }
+
+                    writer.Close();
+                }
+
+                header += Convert.ToString(Math.Round(Now, 1)) + ",";
+                Now += aUnitTime;
+            }
+            stopwatch.Stop();
+
+            // // create .csv file
+            if (createPedCSV)
+            {
+                for (int i = 0; i < peds.Length; i++)
+                {
+                    string fileName = "ped" + i + ".csv";
+                    using (System.IO.StreamWriter file = new System.IO.StreamWriter(@fileName))
+                    {
+                        file.WriteLine(header);
+                        file.WriteLine(traffic_x[i]);
+                        file.WriteLine(traffic_y[i]);
+                        file.WriteLine(detection[i]);
+                    }
                 }
             }
+            double totalSimCount = Sim_Time / aUnitTime * N_Ped;
+
+            double[] Avg_minSpatialResolution = new double[N_Ped];
+            double[] Avg_maxSpatialResolution = new double[N_Ped];
+
+            for (int i = 0; i < N_Ped; i++)
+            {
+                Avg_minSpatialResolution[i] = minSpatialResolution[i] / R_Surv_Time[i];
+                Avg_maxSpatialResolution[i] = maxSpatialResolution[i] / R_Surv_Time[i];
+
+            }
+
+            // 결과(탐지율)
+            Console.WriteLine("====== Surveillance Time Result I ======");
+            Console.WriteLine("N_CCTV: {0}, N_Ped: {1}", N_CCTV, N_Ped);
+            Console.WriteLine("[Result]");
+            Console.WriteLine("  - Execution time : {0}", stopwatch.ElapsedMilliseconds + "ms");
+            Console.WriteLine("[Fail]");
+            Console.WriteLine("  - Out of Range: {0:F2}% ({1}/{2})", 100 * outOfRange.Sum() / totalSimCount, outOfRange.Sum(), totalSimCount);
+            Console.WriteLine("  - Direction Error: {0:F2}% ({1}/{2})", 100 * directionError.Sum() / totalSimCount, directionError.Sum(), totalSimCount);
+            Console.WriteLine("[Success]");
+            Console.WriteLine("  - Surveillance Time: {0:F2}% ({1}/{2})\n", 100 * R_Surv_Time.Sum() / totalSimCount, R_Surv_Time.Sum(), totalSimCount);
+
+            Console.WriteLine("====== Surveillance Time Result II ======");
+            Console.WriteLine(" Simulation Time (sec): {0:F2}", Sim_Time);
+            Console.WriteLine(" [Avg] Out of Range (sec): {0:F2}", outOfRange.Average() * aUnitTime);
+            Console.WriteLine(" [Avg] Direction Error (sec): {0:F2}", directionError.Average() * aUnitTime);
+            Console.WriteLine(" [Avg] Success Time (sec): {0:F2}", R_Surv_Time.Average() * aUnitTime);
+            Console.WriteLine(" [Avg] Spatial Resolution (min): {0:F2}", minSpatialResolution.Average() / Sim_Time);
+            Console.WriteLine(" [Avg] Spatial Resolution (max): {0:F2}", maxSpatialResolution.Average() / Sim_Time);
+            Console.WriteLine(" [Avg] Spatial Resolution (min): {0:F2}", Avg_minSpatialResolution.Average());
+            Console.WriteLine(" [Avg] Spatial Resolution (max): {0:F2}", Avg_maxSpatialResolution.Average());
+
+            string subFolderPath = "Sim_Results";
+            string subFolderPathWithFile = Path.Combine(Directory.GetCurrentDirectory(), subFolderPath);
+            if (!Directory.Exists(subFolderPathWithFile))
+            {
+                Directory.CreateDirectory(subFolderPathWithFile);
+            }
+            string result_FilePath1 = Path.Combine(subFolderPathWithFile, Sim_ID + "_" + "Result1.out");
+            string result_FilePath2 = Path.Combine(subFolderPathWithFile, Sim_ID + "_" + "Result2.out");
+
+
+            //StreamWriter wt_result1 = new StreamWriter(result_FilePath1);
+            //StreamWriter wt_result2 = new StreamWriter(result_FilePath2);
+
+            using (StreamWriter wt_result1 = File.AppendText(result_FilePath1))
+            {
+                wt_result1.WriteLine("{1:F6} {2:F6} {0:F6}", R_Surv_Time.Average() * aUnitTime, outOfRange.Average() * aUnitTime, directionError.Average() * aUnitTime);
+                //wt_result1.Close();
+            }
+            using (StreamWriter wt_result2 = File.AppendText(result_FilePath2))
+            {
+                for (int i = 0; i < N_Ped; i++)
+                {
+                    wt_result2.WriteLine("{3} {4} {1:F2} {2:F2} {0:F2}", R_Surv_Time[i] * aUnitTime, outOfRange[i] * aUnitTime, directionError[i] * aUnitTime, randSeedList[idx_sim], i);
+                }
+                //wt_result2.Close();
+            }
+
+
+
+            // 결과(시간)
+            // Console.WriteLine("Execution time : {0}", stopwatch.ElapsedMilliseconds + "ms");
+            // accTime += stopwatch.ElapsedMilliseconds;
+
+            // Console.WriteLine("\n============ RESULT ============");
+            // Console.WriteLine("CCTV: {0}, Ped: {1}", N_CCTV, N_Ped);
+            // Console.WriteLine("Execution time : {0}\n", (accTime / 1000.0 ) + " sec");
+            string subFolderPath1 = "Sim_Results";
+            string subFolderPathWithFile1 = Path.Combine(Directory.GetCurrentDirectory(), subFolderPath1);
+            if (!Directory.Exists(subFolderPathWithFile1))
+            {
+                Directory.CreateDirectory(subFolderPathWithFile1);
+            }
+            string excelFilePath = Path.Combine(subFolderPathWithFile1, "Sim_Results.xlsx");
+
+            FileInfo excelResultFile = new FileInfo(excelFilePath);
+            ExcelPackage excelPackage;
+
+            if (excelResultFile.Exists)
+            {
+                // 기존 파일이 있는 경우 로드
+                excelPackage = new ExcelPackage(excelResultFile);
+            }
+            else
+            {
+                // 새로운 파일인 경우 생성
+                excelPackage = new ExcelPackage(excelResultFile);
+            }
+
+            // 기존 시트 확인
+            ExcelWorksheet worksheet;
+            if (excelPackage.Workbook.Worksheets.Any(x => x.Name == Sim_ID))
+            {
+                // 기존 시트가 있는 경우 해당 시트 가져오기
+                worksheet = excelPackage.Workbook.Worksheets[Sim_ID];
+            }
+            else
+            {
+                // 기존 시트가 없는 경우 새로운 시트 생성
+                worksheet = excelPackage.Workbook.Worksheets.Add(Sim_ID);
+            }
+
+
+            worksheet.Cells["A1"].Value = "seed";
+            worksheet.Cells["B1"].Value = "Out of range (sec)";
+            worksheet.Cells["C1"].Value = "Direction error (sec)";
+            worksheet.Cells["D1"].Value = "Success (sec)";
+            worksheet.Cells["E1"].Value = "minSpatialResolution";
+            worksheet.Cells["F1"].Value = "maxSpatialResolution";
+
+            int TargetCellCol = idx_sim + 2;
+            worksheet.Cells["A" + TargetCellCol as string].Value = randSeedList[idx_sim];
+            worksheet.Cells["B" + TargetCellCol as string].Value = outOfRange.Average() * aUnitTime;
+            worksheet.Cells["C" + TargetCellCol as string].Value = directionError.Average() * aUnitTime;
+            worksheet.Cells["D" + TargetCellCol as string].Value = R_Surv_Time.Average() * aUnitTime;
+            worksheet.Cells["E" + TargetCellCol as string].Value = minSpatialResolution.Average() / Sim_Time;
+            worksheet.Cells["F" + TargetCellCol as string].Value = maxSpatialResolution.Average() / Sim_Time;
+
+            if (idx_sim == numSim - 1)
+            {
+                TargetCellCol = TargetCellCol + 1;
+                worksheet.Cells["B" + TargetCellCol as string].Formula = "AVERAGE(B2:B" + (TargetCellCol - 1) as string + ")";
+                worksheet.Cells["C" + TargetCellCol as string].Formula = "AVERAGE(C2:C" + (TargetCellCol - 1) as string + ")";
+                worksheet.Cells["D" + TargetCellCol as string].Formula = "AVERAGE(D2:D" + (TargetCellCol - 1) as string + ")";
+                worksheet.Cells["E" + TargetCellCol as string].Formula = "AVERAGE(E2:E" + (TargetCellCol - 1) as string + ")";
+                worksheet.Cells["F" + TargetCellCol as string].Formula = "AVERAGE(F2:F" + (TargetCellCol - 1) as string + ")";
+            }
+            //var file = new System.IO.FileInfo("Sim_Results.xlsx");
+            excelPackage.Save();
+
+
+
+            if (On_Visualization)
+            {
+                MLApp.MLApp matlab = new MLApp.MLApp();
+
+                matlab.Execute(@"cd 'D:\Google 드라이브\Temporary Working\연구관련\CCTV 운용 시뮬레이션\Surveillance System (C#)\2021-2_SurveillanceSystem-main\surveillance_system\src\matlab_code'");
+                //matlab.Execute(@"cd 'C:\Users\0bookim\내 드라이브\Temporary Working\연구관련\CCTV 운용 시뮬레이션\Surveillance System (C#)\2021-2_SurveillanceSystem-main\surveillance_system\src\matlab_code'");
+
+                double[] X1;
+                double[] Y1;
+                double[] X2;
+                double[] Y2;
+
+                //double opt_precesionBorderLine = 0.001;
+                matlab.Execute(@"clear all;");
+                matlab.Execute(@"close all;");
+                matlab.Execute(@"figure;");
+                matlab.Execute(@"hold on;");
+
+                for (int i = 0; i < N_CCTV; i++)
+                {
+                    matlab.PutWorkspaceData("H_AOV", "base", cctvs[i].H_AOV);
+                    matlab.PutWorkspaceData("ViewAngleH", "base", cctvs[i].ViewAngleH);
+                    matlab.PutWorkspaceData("X", "base", cctvs[i].X);
+                    matlab.PutWorkspaceData("Y", "base", cctvs[i].Y);
+                    matlab.PutWorkspaceData("R_blind", "base", cctvs[i].Eff_Dist_From);
+                    matlab.PutWorkspaceData("R_eff", "base", cctvs[i].Eff_Dist_To);
+
+                    matlab.PutWorkspaceData("i", "base", i);
+
+                    matlab.PutWorkspaceData("CCTV_H_FOV_X0", "base", cctvs[i].H_FOV.X0);
+                    matlab.PutWorkspaceData("CCTV_H_FOV_X1", "base", cctvs[i].H_FOV.X1);
+                    matlab.PutWorkspaceData("CCTV_H_FOV_X2", "base", cctvs[i].H_FOV.X2);
+
+                    matlab.PutWorkspaceData("CCTV_H_FOV_Y0", "base", cctvs[i].H_FOV.Y0);
+                    matlab.PutWorkspaceData("CCTV_H_FOV_Y1", "base", cctvs[i].H_FOV.Y1);
+                    matlab.PutWorkspaceData("CCTV_H_FOV_Y2", "base", cctvs[i].H_FOV.Y2);
+
+
+                    matlab.Execute(@"[BorderLine_blind, BorderLine_eff, X, Y] = get_Sectoral_Coverage_CS(H_AOV, ViewAngleH, X, Y, R_blind, R_eff);");
+                    //matlab.Execute(@"X = cast(X,"double"); Y = cast(Y, "double");");
+                    matlab.Execute(@"plot(X, Y, 'o','MarkerFaceColor','red', 'MarkerEdgeColor','Blue');");
+                    matlab.Execute(@"text(X, Y, num2str(i));");
+
+                    matlab.Execute(@"plot(CCTV_H_FOV_X0, CCTV_H_FOV_Y0, '--');");
+                    matlab.Execute(@"plot(CCTV_H_FOV_X1, CCTV_H_FOV_Y1);");
+                    matlab.Execute(@"plot(CCTV_H_FOV_X2, CCTV_H_FOV_Y2)");
+
+
+                    matlab.Execute(@"BorderLine_blind_X(1,:) = BorderLine_blind(:,1);");
+                    matlab.Execute(@"BorderLine_blind_Y(1,:) = BorderLine_blind(:,2);");
+
+                    matlab.Execute(@"BorderLine_eff_X(1,:) = BorderLine_eff(:,1);");
+                    matlab.Execute(@"BorderLine_eff_Y(1,:) = BorderLine_eff(:,2);");
+
+                    matlab.Execute(@"plot(BorderLine_blind_X(1,:), BorderLine_blind_Y(1,:));");
+                    matlab.Execute(@"plot(BorderLine_eff_X(1,:), BorderLine_eff_Y(1,:)); ");
+                }
+
+                for (int j = 0; j < N_Ped; j++)
+                {
+                    matlab.PutWorkspaceData("Pos_H1", "base", peds[j].Pos_H1);
+                    matlab.PutWorkspaceData("Pos_H2", "base", peds[j].Pos_H2);
+                    matlab.PutWorkspaceData("Pos_V1", "base", peds[j].Pos_V1);
+                    matlab.PutWorkspaceData("Pos_V2", "base", peds[j].Pos_V2);
+
+                    matlab.Execute(@"plot([Pos_H1(1) Pos_H2(1)], [Pos_H1(2) Pos_H2(2)], 's-');");
+                }
+
+                int L_DST_row = road.DST.GetLength(0);
+                //int L_DST_col = road.DST.GetLength(1);
+
+                for (int j = 0; j < L_DST_row; j++)
+                {
+
+                    matlab.PutWorkspaceData("DST_X", "base", road.DST[j, 0]);
+                    matlab.PutWorkspaceData("DST_Y", "base", road.DST[j, 1]);
+                    matlab.Execute(@"plot(DST_X, DST_Y, 'p');");
+
+                }
+                int L_intersection_row = road.intersectionArea.GetLength(0);
+                //int L_intersection_col = road.intersectionArea.GetLength(1);
+                for (int j = 0; j < L_intersection_row; j++)
+                {
+
+                    matlab.PutWorkspaceData("intersection_X1", "base", road.intersectionArea[j, 0]);
+                    matlab.PutWorkspaceData("intersection_Y1", "base", road.intersectionArea[j, 2]);
+                    matlab.PutWorkspaceData("intersection_X2", "base", road.intersectionArea[j, 1]);
+                    matlab.PutWorkspaceData("intersection_Y2", "base", road.intersectionArea[j, 3]);
+                    //matlab.Execute(@"plot([intersection_X1 intersection_X2],[intersection_Y1 intersection_Y2], 'k.-');");
+
+                }
+
+                int L_roadVector = road.laneVector.Length;
+                int L_roadLaneH = road.lane_h.GetLength(0);
+                int L_roadLaneV = road.lane_v.GetLength(0);
+
+                matlab.PutWorkspaceData("lane_vector", "base", road.laneVector);
+
+
+                for (int h = 0; h < L_roadLaneH; h++)
+                {
+                    matlab.PutWorkspaceData("lane_h", "base", road.lane_h[h, 0]);
+                    matlab.PutWorkspaceData("lane_h_upper", "base", road.lane_h_upper[h, 0]);
+                    matlab.PutWorkspaceData("lane_h_lower", "base", road.lane_h_lower[h, 0]);
+
+                    matlab.Execute(@"LANE_H = ones(1,length(lane_vector))*lane_h;");
+                    matlab.Execute(@"LANE_HU = ones(1,length(lane_vector))*lane_h_upper;");
+                    matlab.Execute(@"LANE_HL = ones(1,length(lane_vector))*lane_h_lower;");
+
+                    matlab.Execute(@"plot(lane_vector,LANE_H,'--');");
+                    matlab.Execute(@"plot(lane_vector,LANE_HU,'-');");
+                    matlab.Execute(@"plot(lane_vector,LANE_HL,'-');");
+                }
+
+                for (int v = 0; v < L_roadLaneV; v++)
+                {
+                    matlab.PutWorkspaceData("lane_v", "base", road.lane_v[v, 0]);
+                    matlab.PutWorkspaceData("lane_v_left", "base", road.lane_v_left[v, 0]);
+                    matlab.PutWorkspaceData("lane_v_right", "base", road.lane_v_right[v, 0]);
+
+                    matlab.Execute(@"LANE_V = ones(1,length(lane_vector))*lane_v;");
+                    matlab.Execute(@"LANE_VL = ones(1,length(lane_vector))*lane_v_left;");
+                    matlab.Execute(@"LANE_VR = ones(1,length(lane_vector))*lane_v_right;");
+
+                    matlab.Execute(@"plot(LANE_V,lane_vector,'--');");
+                    matlab.Execute(@"plot(LANE_VL,lane_vector,'-');");
+                    matlab.Execute(@"plot(LANE_VR,lane_vector,'-');");
+                }
+
+                matlab.Execute(@"grid on;");
+                matlab.Execute(@"xlabel('X-axis(mm)');ylabel('Y-axis(mm)')");
+                matlab.Execute(@"hold off;");
+                //MLApp.MLApp matlab = new MLApp.MLApp();
+                //matlab.Execute(@"figure;");
+                //matlab.Execute(@"plot(0:0.01:pi, sin(0:0.01:pi))");
+
+            }
+
+
+
+            if (Opt_Demo)
+            {
+                MLApp.MLApp matlab = new MLApp.MLApp();
+                //matlab.Execute(@"cd 'D:\Google 드라이브\Temporary Working\연구관련\CCTV 운용 시뮬레이션\Surveillance System (C#)\2021-2_SurveillanceSystem-main\surveillance_system\src\matlab_code'");
+                matlab.Execute(@"cd 'C:\Users\0bookim\내 드라이브\Temporary Working\연구관련\CCTV 운용 시뮬레이션\Surveillance System (C#)\2021-2_SurveillanceSystem-main\surveillance_system\src\matlab_code'");
+                matlab.Execute(@"Sim_Demo");
+            }
+        }
 
             if (args.Length == 0)
             {
@@ -1957,7 +2117,7 @@ namespace surveillance_system
                 Console.Beep(1000, 1000);
             }
 
-        }
+}
     }
 }
 
