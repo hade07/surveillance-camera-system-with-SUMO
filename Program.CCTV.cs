@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text;
 using System.Collections.Generic;
 
@@ -176,35 +176,34 @@ namespace surveillance_system
 
             public double Z = 3000;
 
-            public double WD;
+            public double WD; // CCTV 센서 너비
 
-            public double HE;
+            public double HE; // 센서 높이
 
-            public double H_AOV;
+            public double H_AOV; // 카메라 수평 시야각_한번에 볼 수 있는 범위
 
-            public double V_AOV;
+            public double V_AOV; // 수직 시야각
 
-            public int imW;
+            public int imW; // 이미지 가로 해상도
 
-            public int imH;
+            public int imH; // 이미지 세로 해상도
 
-            public double Focal_Length;
+            public double Focal_Length; // 카메라 렌즈 초점거리
 
-            public double ViewAngleH;
+            public double ViewAngleH; // 수평 시야방향각(카메라가 현재 바라보는 방향)
 
             public double ViewAngleV = -35*Math.PI/180; // modified by 0BoO, deg -> rad
 
-            public double Eff_Dist_From;
-            public double Eff_Dist_To;
+            public double Eff_Dist_From; // CCTV가 감지할 수 있는 최소 유효 거리
+            public double Eff_Dist_To; // CCTV가 감지할 수 있는 최대 유효 거리
 
             // camera control
-            public double Direction;
+            public double Direction; // CCTV가 바라보는 방향을 변경
 
-            public bool isFixed = false;
+            public bool isFixed = false; // CCTV가 고정형인지 (false: 회전 가능, true: 고정형)
 
             // 최대거리
             public double Max_Dist;
-            
             // todo
             // ground sample distance
 
@@ -214,7 +213,7 @@ namespace surveillance_system
 
             public FOV V_FOV;
 
-            public List<int> detectedPedIndex;
+            public List<int> detectedPedIndex; // CCTV가 특정 시점에 감지된 보행자 인덱스를 저장
 
             public void setZ(int z)
             {
@@ -245,9 +244,10 @@ namespace surveillance_system
 
             public void setViewAngleV(double angleV)
             {
-              // angleV default value is -35
-              if(angleV > -35*Math.PI/180 || angleV < -55 * Math.PI / 180)
-              {
+                // angleV default value is -35
+                if(angleV > -35*Math.PI/180 || angleV < -55 * Math.PI / 180)
+                //if (angleV > -45 * Math.PI / 180 || angleV < -65 * Math.PI / 180)
+                {
                 // debug
                 Console.WriteLine("[Warning] Vertical ViewAngle should be between -35 ~ -55");
                 return;
@@ -269,7 +269,7 @@ namespace surveillance_system
                               + Math.Pow(Math.Abs(Y - ped.Y),2));
             }
             public void calcEffDistToPed(double height)  // 22-02-01, modified by 0BoO
-            {
+            { //  궁금한 점. 여기서 height은 보행자의 키 3미터인가?
                 // matlab code
                 // CCTV.R_eff(i) = (CCTV.Z(i)-Ped_Height*1.0)/tand(abs(CCTV.ViewAngleV(i))-(CCTV.V_AOV(i)/2));
                 // double distance = (Z-ped.H*1.0) / Math.Tan(Math.Abs(ViewAngleV) - (V_AOV/2));
@@ -291,8 +291,8 @@ namespace surveillance_system
             //      && (calcDistToPed(ped) >= calcBlindToPed(ped)) // blind ~ 유효거리
             //      && (calcDistToPed(ped) <= calcEffDistToPed(ped));
             //}
-            public void get_H_FOV(
-                double[] Dist,
+            public void get_H_FOV( //CCTV의 수평 시야각을 기반으로 카메라가 감지할 수 있는 범위를 계산
+                double[] Dist, // 거리가 배열인 이유는 여러 물체의 거리를 동시에 계산하려고.
                 double WD,
                 double Focal_Length,
                 double ViewAngle,
@@ -491,14 +491,12 @@ namespace surveillance_system
                 double[] V_FOV = new double[len];
                 PPM_H = new double[len];
                 PPM_V = new double[len];
-
                 
                 for (int i = 0; i < len; i++)
                 {
                     Dist_Meter[i] = dist[i] * 0.001;
                 }
                 
-
                 for (int i = 0; i < len; i++)
                 {
                     H_FOV[i] = Dist_Meter[i] * WD / Lens_FocalLength;
