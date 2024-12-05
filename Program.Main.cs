@@ -20,7 +20,6 @@ using OfficeOpenXml.Style;
 using OfficeOpenXml.Style.Dxf;
 using static surveillance_system.Program;
 
-
 namespace surveillance_system
 {
     public partial class Program
@@ -28,7 +27,7 @@ namespace surveillance_system
         //static int randSeed = 1734;
         //public static Random rand = new Random(randSeed); // modified by 0boo 23-01-27
         static string Sim_ID = "240502_TEST";
-        static int numSim = 1;
+        static int numSim = 10;
         static int initRandSeed = 1731;
         static int[] randSeedList = new int[numSim];
 
@@ -39,7 +38,8 @@ namespace surveillance_system
         // 240806 김단하. 시뮬레이션 보행자 이동 모델 옵션 선택, 
         const int Opt_PED_MobilityModel = 1;
         // Mode 0 : 기존, Mode 1: SUMO 기반 모델
-
+        // 241112 김단하. CCTV 배치 옵션 선택 , 0: SUMO 주요 통행로, 1: junction 위주
+        const int Opt_CCTV_Placement = 1;
 
         public static Random rand; // modified by 0boo 23-01-27
 
@@ -78,7 +78,6 @@ namespace surveillance_system
                     {
                         peds[j].Spatial_Resolution[i, k] = 0;
                     }
-
                     double dist_h1 = Math
                             .Sqrt(Math.Pow(cctvs[i].X - peds[j].Pos_H1[0], 2) +
                             Math.Pow(cctvs[i].Y - peds[j].Pos_H1[1], 2));
@@ -143,7 +142,6 @@ namespace surveillance_system
                 }
             }
 
-
             // return returnArr;
 
             // 각 CCTV의 보행자 탐지횟수 계산
@@ -163,13 +161,11 @@ namespace surveillance_system
 
                 for (int j = 0; j < N_Ped; j++)
                 {
-
                     // 거리상 미탐지면 넘어감 --> (23-02-07) blocked
                     //if (candidate_detected_ped_h[i, j] != 1 || candidate_detected_ped_v[i, j] != 1)
                     //{                      
                     //    continue;
                     //}
-
                     if (candidate_detected_ped1[i, j] != 1 || candidate_detected_ped2[i, j] != 1)
                     {
                         continue;
@@ -236,10 +232,8 @@ namespace surveillance_system
                         else
                         {
                             v_detected = 0;
-
                         }
                     }
-
 
                     if (h_detected == 1 && v_detected == 1)
                     {
@@ -280,7 +274,6 @@ namespace surveillance_system
 
                 } // 탐지 여부 계산 완료
             }
-
 
 
             // 여기부턴 h or v 각각 분석
@@ -331,7 +324,6 @@ namespace surveillance_system
             //     }
             // }
             // Console.WriteLine("---------------------------------");
-
 
             return returnArr;
         }
@@ -795,7 +787,6 @@ namespace surveillance_system
             return returnArr;
         }
 
-
         // 240927 김단하. 임시 메모.
         static bool On_Road_Builder; // 0:No road, 1:Grid
         static int Road_Width; // unit : mm
@@ -860,6 +851,7 @@ namespace surveillance_system
 
         // 241013 읽어올 CCTV 위치 정보 array에 저장
         static double[,] cctv_fcd_output;
+        static double[,] cctv_junction;
 
         // 241013 김단하 CCTV 고정 좌표 배치
         static void setCCTV_FromArray(int n_cctv, double[,] cctvCoordinates)
@@ -870,7 +862,6 @@ namespace surveillance_system
                 cctvs[i].Y = cctvCoordinates[i, 1] * 1000; // Y 좌표
             }
         }
-
 
         static void Main(string[] args)
         {
@@ -1001,7 +992,8 @@ namespace surveillance_system
                 {
                     // 읽어 오는 것 선 구현. 시뮬레이션 시작 전, 보행자 객체들 생성 전에 이루어지게 이 작업이.
                     // 엑셀 파일 경로
-                    string filePath = @"test_pedestrian_route_241027.xlsx";
+                    //string filePath = @"test_pedestrian_route_241027.xlsx";
+                    string filePath = @"test_pedestrian_route_241109.xlsx";
                     // 파일이 존재하는지 확인
                     if (!File.Exists(filePath))
                     {
@@ -1180,13 +1172,14 @@ namespace surveillance_system
                 }
                 //Console.WriteLine("The Max ID of PED is: " + N_Ped);
 
-                // 241013 SUMO output으로부터 CCTV 위치 읽어오는 옵션
-                if (Opt_PED_MobilityModel == 1) {
+                // 241013 SUMO output으로부터 CCTV 위치 읽어오는 옵션, 241112 김단하. CCTV 배치 옵션 하나 더 추가, 보행자 기본이동길배치
+                if (Opt_PED_MobilityModel == 1 && Opt_CCTV_Placement == 0) {
                     // cctv 배열 초기화부 일단 해준다
                     cctv_fcd_output = new double[N_CCTV, 2];
 
                     //string filePath = @"test_pedestrian_route_240825.xlsx";
-                    string filePath = @"test_pedestrian_route_241027.xlsx";
+                    //string filePath = @"test_pedestrian_route_241027.xlsx";
+                    string filePath = @"test_pedestrian_route_241109.xlsx";
                     // 파일이 존재하는지 확인
                     if (!File.Exists(filePath))
                     {
@@ -1277,6 +1270,78 @@ namespace surveillance_system
 
                 }
 
+                //241112 김단하. CCTV 배치 옵션 하나 더 추가, junction 배치
+                else if (Opt_PED_MobilityModel == 1 &&  Opt_CCTV_Placement == 1)
+                {
+                    // cctv 배열 초기화 일단 해준다
+                    cctv_junction = new double[N_CCTV, 2];
+
+                    //string filePath = @"test_pedestrian_route_240825.xlsx";
+                    string filePath2 = @"junction_coords_20241112_160817.xlsx";
+                    // 파일이 존재하는지 확인
+                    if (!File.Exists(filePath2))
+                    {
+                        Console.WriteLine("파일을 찾을 수 없습니다.");
+                        return;
+                    }
+
+                    // 엑셀 파일 로드
+                    object[,] temp_cctv_fcd_output;
+                    using (var package = new ExcelPackage(new FileInfo(filePath2)))
+                    {
+                        // 첫 번째 워크시트 가져오기
+                        var worksheet1 = package.Workbook.Worksheets[0];
+
+                        // 이 곳에 CCTV좌표 정보들 저장한다.  x,y 좌표값 // 컬럼수 2
+                        // 아래는 임시 배열. 추후 여기서 랜덤 추출하여 N_CCTV * 2 크기의 cctv_junction에 값 저장 예정
+                        temp_cctv_fcd_output = new object[N_CCTV, 2];
+                        int numofRow = worksheet1.Dimension.Rows;
+                        Random random3 = new Random();
+                        int sampling = 0; // 추출 성공한 횟수 카운트용
+                        while (sampling != N_CCTV) 
+                        {
+                            // 읽고, 랜덤 행, 컬럼 인덱스의 값 하나를 추출. 인덱스 범위는 5이상 14이하. 
+                            int rand_rowindex = random3.Next(numofRow);
+                            int rand_colindex = random3.Next(5, 15);
+                           // Console.WriteLine("The rand_rowindex,colindex is " + rand_rowindex + ", " + rand_colindex);
+                            // 인덱스에 해당되는 행의 값이 비어있지 않으면, 배열에 값 저장.
+                            if (!string.IsNullOrEmpty(worksheet1.Cells[rand_rowindex, rand_colindex].Text)){
+                                //temp_cctv_fcd_output[sampling, 0] = worksheet1.Cells[rand_rowindex, 1].Value; // X, Y좌표쌍 저장
+                                string[] values = worksheet1.Cells[rand_rowindex, rand_colindex].Text.Trim('(', ')').Split(','); // 숫자만 추출.
+                                //Console.WriteLine("The first: " + values[0] + " The second: " + values[1]);
+                                cctv_junction[sampling, 0] = Convert.ToDouble(values[0]); // X좌표
+                                cctv_junction[sampling, 1] = Convert.ToDouble(values[1]); // Y좌표
+                                //Console.WriteLine("the value of CCTV_Y is : " + cctv_junction[sampling, 0]);
+                                //Console.WriteLine("the value of CCTV_Y is : " + cctv_junction[sampling, 1]);
+
+                                sampling++;
+                                //Console.WriteLine("The number of sampling success is " + sampling);
+                            }
+                            else
+                            {
+                                //Console.WriteLine("The cell is empty ");
+                            }
+    
+                        }
+
+                    }
+/*                    Random rand_cctv = new Random();
+                    for (int i = 0; i < N_CCTV; i++)
+                    {
+                        //저장한 임시배열 행의 X,Y 값을 가져와서 진짜 CCTV 위치 배열에 저장하자
+                        double randomValue_X = Convert.ToDouble(temp_cctv_fcd_output[i, 0]);
+                        double randomValue_Y = Convert.ToDouble(temp_cctv_fcd_output[i, 1]);
+
+                        //cctv_fcd_output에대 하나씩 저장
+                        cctv_fcd_output[i, 0] = randomValue_X;
+                        //Console.WriteLine("the value of CCTV_X is : " + cctv_fcd_output[i, 0]);
+                        cctv_fcd_output[i, 1] = randomValue_Y;
+                        //Console.WriteLine("the value of CCTV_Y is : "+ cctv_fcd_output[i, 1]);
+
+                    }*/
+                    Console.WriteLine("CCTV location information has been successfully stored in cctv_junction: " + cctv_junction.GetLength(0));
+
+                }
                 else
                 {
                     throw new Exception("Unexpected option _ get CCTV position");
@@ -1466,13 +1531,39 @@ namespace surveillance_system
                         cctvs[i].setViewAngleH(Target_DST_X, Target_DST_Y);
                     }
 
-                    else if (Opt_PED_MobilityModel == 1)
+                    else if (Opt_PED_MobilityModel == 1 && Opt_CCTV_Placement == 0)
                     {
                         // Here!!!!!!!!
                         // (0) Initialization of camera instance.(X, 위에 있음)
                         //cctv_fcd_output = new double[N_CCTV, 2]; 위에다  먼저 초기화 해버린 실수.. 고칠 예정
 
+                        //241112 김단하. 이게 보행자 좌표 위주로 배치
                         setCCTV_FromArray(N_CCTV, cctv_fcd_output);
+                        //241112 김단하. junction 좌표 쓰기.
+                        //setCCTV_FromArray(N_CCTV, cctv_junction);
+
+                        //Console.WriteLine($" CCTV {i}, X  {cctvs[i].X} ");
+                        //Console.WriteLine($" CCTV {i}, Y {cctvs[i].Y} ");
+
+                        // (1) Set Camera location (deploy camera)
+                        // (2) Set Viewing Angle in Horizontal domain.(random 0~360)
+
+                        //241027 이하 4라인 임시 주석처리
+                        //cctvs[i].setViewAngleV(-rand.Next(45, 66) * Math.PI / 180);
+                        //cctvs[i].setViewAngleH(rand.Next(4) * 90);
+                        //Console.WriteLine($" The Vertical Angle of CCTV {i}, {cctvs[i].ViewAngleV} ");
+                        //Console.WriteLine($" The Horizontal Angle of CCTV {i}, {cctvs[i].ViewAngleH} ");
+
+                    }
+                    else if (Opt_PED_MobilityModel == 1 && Opt_CCTV_Placement == 1)
+                    {
+                        // Here!!!!!!!!
+                        // (0) Initialization of camera instance.(X, 위에 있음)
+                        //cctv_fcd_output = new double[N_CCTV, 2]; 위에다  먼저 초기화 해버린 실수.. 고칠 예정
+
+                        //241112 김단하. junction 좌표 쓰기.
+                        setCCTV_FromArray(N_CCTV, cctv_junction);
+
                         //Console.WriteLine($" CCTV {i}, X  {cctvs[i].X} ");
                         //Console.WriteLine($" CCTV {i}, Y {cctvs[i].Y} ");
 
@@ -1487,8 +1578,8 @@ namespace surveillance_system
 
                     }
 
-                // 241027 이하 라인 이거 원래 주석처리
-                cctvs[i].setViewAngleH(rand.Next(4) * 90);
+                    // 241027 이하 라인 이거 원래 주석처리
+                    cctvs[i].setViewAngleH(rand.Next(4) * 90);
                 // cctvs[i].setViewAngleV(-35 - 20 * rand.NextDouble());
                 cctvs[i].setViewAngleV(-45.0 * Math.PI / 180);   // (23-02-02) modified by 0BoO, deg -> rad
 
@@ -1538,7 +1629,7 @@ namespace surveillance_system
             *  도로 정보 생성 + 보행자/CCTV 초기화 끝
             ------------------------------------------- */
             // 600초
-            double Sim_Time = 60; // unit: sec
+            double Sim_Time = 600; // unit: sec
                                   //double Now = 10; 
             double Now = 0; // 240831 김단하
             // Console.WriteLine(">>> Simulating . . . \n");
