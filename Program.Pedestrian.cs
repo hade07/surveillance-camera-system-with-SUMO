@@ -6,24 +6,25 @@ namespace surveillance_system
 {
     public partial class Program
     {
-        public class SurveillanceTarget {
+        public class SurveillanceTarget
+        {
             public int ID; // 240829 modified. string -> int  by DanHa Kim
-            public double X; 
+            public double X;
             public double Y;
 
             public double DST_X;
             public double DST_Y;
 
-            public double Direction;
-            public double Velocity;
-            public double Unit_Travel_Dist;
+            public double Direction;  //이동방향
+            public double Velocity; //이동 속도
+            public double Unit_Travel_Dist; //단위시간당 이동 거리
 
             public double MAX_Dist_X;
             public double MAX_Dist_Y;
 
             public double ground; // Z ?
-            // 240823 김단하 추가, 보행자가 시뮬레이션에 등장하는지 여부. false가 default
-            public bool Enable = false;
+
+            public bool Enable = false; // 240823 김단하 추가, 보행자가 시뮬레이션에 등장하는지 여부. false가 default
 
             /* ==================================
             /   추가
@@ -42,61 +43,16 @@ namespace surveillance_system
             public double[] Pos_V1 = new double[2];
             public double[] Pos_V2 = new double[2];
 
-            public double[,] Spatial_Resolution;
+            public double[,] Spatial_Resolution; // 대상이 감시 카메라에 얼마나 잘 탐지되었는지..해상도?
 
             public int N_Surv; //number of surveillance camera viewing this target.
 
-            public int TTL;
+            public int TTL; //객체 생존(유효) 시간
             public void define_PED(
                 double Width,
                 double Height,
                 double DST_X,
                 double DST_Y,
-                double Velocity,
-                int N_CCTV
-            )
-            {
-                //Random rand = new Random(randSeed); // modified by 0boo 23-01-27
-
-                this.W = Width;
-                this.H = Height;
-                this.D1 = 90 *Math.PI/180;   // modified by 0BoO, deg -> rad
-                this.D2 = (180 + 90 * rand.NextDouble()) * Math.PI / 180; // modified by 0BoO, deg -> rad
-                this.W2 = this.W / 2;
-
-                //this.Pos_H1[0] =
-                //    Math.Round(this.W2 * Math.Cos(D1 + this.Direction) + this.X, 2);
-                //this.Pos_H1[1] =
-                //    Math.Round(this.W2 * Math.Sin(D1 + this.Direction) + this.Y, 2);
-                //this.Pos_H2[0] =
-                //    Math.Round(this.W2 * Math.Cos(D2 + this.Direction) + this.X, 2);
-                //this.Pos_H2[1] =
-                //    Math.Round(this.W2 * Math.Sin(D2 + this.Direction) + this.Y, 2);
-
-                this.Pos_V1[0] = this.X;
-                this.Pos_V1[1] = this.H;
-
-                this.Pos_V2[0] = this.X;
-                // [220331] may be height of ground, instead of 0
-                this.Pos_V2[1] = 0; 
-
-                this.DST_X = DST_X;
-                this.DST_Y = DST_Y;
-                this.Velocity = Velocity;
-
-                this.Unit_Travel_Dist = Velocity * aUnitTime; 
-
-                // % for performance measure
-                this.N_Surv = 0;
-
-                this.Spatial_Resolution = new double[N_CCTV, 11];
-                // [Out of Range(0), Direction Miss(-1), Detected(1)]  SR(Width1, Width2, Height1,Height2) numPixels(Width1, Width2, Height1,Height2) areaPixels(min, max)
-            }
-
-            // 240901 김단하 define_PED 오버로딩. DST_X 같은 목적지 필요 없어보여서 삭제./
-            public void define_PED(
-                double Width,
-                double Height,
                 double Velocity,
                 int N_CCTV
             )
@@ -125,10 +81,53 @@ namespace surveillance_system
                 // [220331] may be height of ground, instead of 0
                 this.Pos_V2[1] = 0;
 
-
+                this.DST_X = DST_X;
+                this.DST_Y = DST_Y;
                 this.Velocity = Velocity;
 
                 this.Unit_Travel_Dist = Velocity * aUnitTime;
+
+                // % for performance measure
+                this.N_Surv = 0;
+
+                this.Spatial_Resolution = new double[N_CCTV, 11];
+                // [Out of Range(0), Direction Miss(-1), Detected(1)]  SR(Width1, Width2, Height1,Height2) numPixels(Width1, Width2, Height1,Height2) areaPixels(min, max)
+            }
+
+            // 241025 김단하 define_PED 오버로딩. DST_X 같은 목적지, 속도 설정 관련 필요 없어보여서 삭제./
+            public void define_PED(
+                double Width,
+                double Height,
+                int N_CCTV
+            )
+            {
+                //Random rand = new Random(randSeed); // modified by 0boo 23-01-27
+
+                this.W = Width;
+                this.H = Height;
+                this.D1 = 90 * Math.PI / 180;   // modified by 0BoO, deg -> rad
+                this.D2 = (180 + 90 * rand.NextDouble()) * Math.PI / 180; // modified by 0BoO, deg -> rad
+                this.W2 = this.W / 2;
+
+                //this.Pos_H1[0] =
+                //    Math.Round(this.W2 * Math.Cos(D1 + this.Direction) + this.X, 2);
+                //this.Pos_H1[1] =
+                //    Math.Round(this.W2 * Math.Sin(D1 + this.Direction) + this.Y, 2);
+                //this.Pos_H2[0] =
+                //    Math.Round(this.W2 * Math.Cos(D2 + this.Direction) + this.X, 2);
+                //this.Pos_H2[1] =
+                //    Math.Round(this.W2 * Math.Sin(D2 + this.Direction) + this.Y, 2);
+
+                this.Pos_V1[0] = this.X;
+                this.Pos_V1[1] = this.H;
+
+                this.Pos_V2[0] = this.X;
+                // [220331] may be height of ground, instead of 0
+                this.Pos_V2[1] = 0;
+
+                //this.Velocity = Velocity;
+
+                //this.Unit_Travel_Dist = Velocity * aUnitTime;
 
                 // % for performance measure
                 this.N_Surv = 0;
@@ -155,7 +154,7 @@ namespace surveillance_system
 
                 this.Pos_H1[0] = //어깨1의 좌표 업데이트
                     Math.Round(this.W2 * Math.Cos(D1 + this.Direction) + this.X, 2);
-                this.Pos_H1[1] = 
+                this.Pos_H1[1] =
                     Math.Round(this.W2 * Math.Sin(D1 + this.Direction) + this.Y, 2);
                 this.Pos_H2[0] = //어깨2
                     Math.Round(this.W2 * Math.Cos(D2 + this.Direction) + this.X, 2);
@@ -236,8 +235,8 @@ namespace surveillance_system
                 Console.WriteLine("출발지 : ({0},{1}) \n", this.X, this.Y);
                 Console.WriteLine("목적지 : ({0},{1}) \n", this.DST_X, this.DST_Y);
                 Console.WriteLine("방향 각도(라디안) : {0} \n", this.Direction);
-                Console.WriteLine("속도 : {0} \n", this.Velocity);
-                Console.WriteLine("단위이동거리 : {0} \n", this.Unit_Travel_Dist);
+                //Console.WriteLine("속도 : {0} \n", this.Velocity);
+                //Console.WriteLine("단위이동거리 : {0} \n", this.Unit_Travel_Dist);
                 Console.WriteLine("Pos_H1 : ({0},{1})   Pos_H2 : ({2},{3})  \n",
                     this.Pos_H1[0], this.Pos_H1[1], this.Pos_H2[0], this.Pos_H2[1]);
                 Console.WriteLine("Pos_V1 : ({0},{1})   Pos_V2 : ({2},{3}) \n",
@@ -263,9 +262,9 @@ namespace surveillance_system
             void downVelocity(); // 속도 감소
         }
 
-        interface Person: Movable {}
+        interface Person : Movable { }
 
-        interface Vehicle: Movable {}
+        interface Vehicle : Movable { }
 
         public class Pedestrian : SurveillanceTarget, Person
         {
@@ -276,7 +275,7 @@ namespace surveillance_system
                 this.Y = 0;
             }
             // 240811. 김단하. SUMO 기반 보행자 mobility 를 위한 생성자
-            public Pedestrian(int personID, double x,double y)
+            public Pedestrian(int personID, double x, double y)
             {
                 this.ID = personID;
                 this.X = x;
@@ -309,7 +308,7 @@ namespace surveillance_system
                 if (isArrived() || outOfRange())
                 {
                     // Index out of range
-                    updateDestination(); 
+                    updateDestination();
                     setDirection();
                 }
             }
@@ -321,16 +320,16 @@ namespace surveillance_system
             {
                 this.Velocity += 0.01f;
             }
-            public  void  updateDestination() //240820 김단하 이거 인접 교차로 값 갖고오는 것 같다.
-            {      
+            public void updateDestination() //240820 김단하 이거 인접 교차로 값 갖고오는 것 같다.
+            {
                 double[,] newPos = road.getPointOfAdjacentRoad(road.getIdxOfIntersection(X, Y));
                 DST_X = Math.Round(newPos[0, 0]); //그런데 이 코드는 뭘까?(._.
                 DST_Y = Math.Round(newPos[0, 1]);
             }
-            
+
         }
 
-        public class Car: SurveillanceTarget, Vehicle
+        public class Car : SurveillanceTarget, Vehicle
         {
             public void move()
             {
@@ -361,7 +360,7 @@ namespace surveillance_system
                 DST_X = Math.Round(newPos[0, 0]);
                 DST_Y = Math.Round(newPos[0, 1]);
             }
-            
+
             public void downVelocity()
             {
                 this.Velocity -= 0.1f;
